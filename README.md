@@ -26,7 +26,6 @@ tiktok-downloader/
   frontend/app.js
   frontend/config.js
   tests/test_api.py
-  .github/workflows/pages.yml
   render.yaml
   pytest.ini
   .gitignore
@@ -156,18 +155,18 @@ Sửa `frontend/config.js`:
 window.CLIPNEST_CONFIG = { API_BASE_URL: 'https://URL-THUC-TE.onrender.com' };
 ```
 
-Trong repo → Settings → Pages → Source chọn **GitHub Actions**; hoặc CLI:
+Frontend được xuất bản từ nhánh **gh-pages**, không cần build step hay quyền GitHub Actions. Sau khi sửa API_BASE_URL, chạy:
 
 ```sh
-gh api --method POST repos/GITHUB_USERNAME/clipnest/pages -f build_type=workflow
 git add frontend/config.js
 git commit -m "Configure deployed API"
-git push
-gh workflow run pages.yml
-gh run list --workflow pages.yml
+git push origin main
+git subtree split --prefix frontend -b gh-pages
+git push origin gh-pages
+gh api --method POST repos/GITHUB_USERNAME/clipnest/pages -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
 ```
 
-Nếu Pages đã có, dùng `PUT` để cập nhật `build_type`, không POST lại. Chờ workflow xanh. Website mặc định: `https://GITHUB_USERNAME.github.io/clipnest/`.
+Nếu Pages đã có, dùng `PUT` để cập nhật cấu hình thay vì `POST`. Sau mỗi lần sửa frontend: commit vào main, chạy `git subtree split --prefix frontend` để lấy commit rồi push commit đó lên gh-pages. Không cần build JavaScript. Chờ Pages báo build thành công. Website mặc định: `https://GITHUB_USERNAME.github.io/clipnest/`.
 
 Kiểm tra từ frontend thật: info, MP4, MP3, user limit=2, tiến trình, ZIP, origin CORS. Kiểm tra vượt rate limit và xác thực IP proxy sau triển khai. Tải được local không đảm bảo tải được từ IP cloud của Render.
 
@@ -176,7 +175,7 @@ Kiểm tra từ frontend thật: info, MP4, MP3, user limit=2, tiến trình, ZI
 Không cần mua domain để dùng website. Nếu bạn đã có domain:
 
 1. Thêm `frontend/CNAME` chứa đúng hostname, ví dụ `clips.example.com`, rồi commit/push.
-2. Repo → Settings → Pages → Custom domain: nhập cùng hostname, lưu. **Với GitHub Actions, GitHub không dùng file CNAME để cấu hình domain; bước Settings vẫn bắt buộc.**
+2. Repo → Settings → Pages → Custom domain: nhập cùng hostname, lưu. Nhánh gh-pages cũng phải chứa CNAME; bước subtree split/push sẽ mang file từ frontend sang nhánh này.
 3. Với subdomain, DNS CNAME `clips` trỏ `GITHUB_USERNAME.github.io` (không có đường dẫn repo).
 4. Với apex/root domain, đặt bốn A record trỏ `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`. Xoá record xung đột. Xem [hướng dẫn DNS chính thức](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
 5. Chờ DNS/chứng chỉ hoàn tất, bật **Enforce HTTPS**. Nên xác minh quyền sở hữu domain trong GitHub trước khi gắn DNS.

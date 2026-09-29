@@ -4,7 +4,7 @@ Tên chọn: **clipnest**. Source: `/Users/vanphong/Desktop/tiktok-downloader`.
 
 - Backend và frontend đã hoàn thành bản local, có kiểm thử tải thật MP4/MP3/ZIP 2 video.
 - Dockerfile và Blueprint Render Free đã chuẩn bị; Docker image build thành công.
-- GitHub Actions Pages đã chuẩn bị.
+- GitHub Pages dùng nhánh gh-pages, không cần quyền GitHub Actions.
 - `frontend/config.js` hiện dùng `http://localhost:8000`; không phải URL production.
 - Chưa tạo repo hoặc xuất bản: đang chờ đăng nhập GitHub và Render.
 
