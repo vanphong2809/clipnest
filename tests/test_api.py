@@ -48,7 +48,7 @@ def test_reject_redirect_to_private(monkeypatch):
 def test_user_normalization(value):
     assert main.normalize_user(value) == 'abc'
 
-@pytest.mark.parametrize('limit', [0,101,1.1,'20',True])
+@pytest.mark.parametrize('limit', [0,1.1,'20',True])
 def test_invalid_limit(limit):
     assert client.post('/api/user/start', json={'username':'abc','limit':limit}).status_code == 422
 

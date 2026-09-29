@@ -532,7 +532,7 @@ app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=['GET', 
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, exc):
-    return JSONResponse({'detail': 'Dữ liệu không hợp lệ. Nhập đúng link/username và số lượng nguyên từ 1 đến 100.'}, 422)
+    return JSONResponse({'detail': 'Dữ liệu không hợp lệ. Nhập đúng link/username và số lượng nguyên lớn hơn hoặc bằng 1.'}, 422)
 
 @app.exception_handler(UserError)
 async def user_error(request, exc):
@@ -543,7 +543,7 @@ class VideoInput(BaseModel):
 
 class UserInput(BaseModel):
     username: str = Field(min_length=1, max_length=2048)
-    limit: int = Field(default=20, ge=1, le=100, strict=True)
+    limit: int = Field(default=20, ge=1, strict=True)
 
 @contextlib.contextmanager
 def foreground_slot():
