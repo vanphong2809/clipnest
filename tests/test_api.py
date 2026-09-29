@@ -135,3 +135,58 @@ def test_short_redirect_success(monkeypatch,short_url):
         stream=response
     monkeypatch.setattr(main.httpx,'Client',FakeClient)
     assert main.canonical_video(short_url)=='https://www.tiktok.com/@abc/video/123'
+
+@pytest.mark.parametrize('message,code',[
+    ('Unable to download webpage: timed out','network'),
+    ('Unable to extract secondary user ID','profile_id'),
+    ('Failed to parse JSON','upstream_response'),
+    ('HTTP Error 403: Forbidden','access_denied'),
+    ('HTTP Error 429: Too Many Requests','tiktok_rate_limit'),
+    ('This account is private','login_required'),
+])
+def test_precise_error_codes(message,code):
+    assert main.error_code(RuntimeError(message))==code
+    if code in {'profile_id','upstream_response','network'}:
+        assert 'hoặc chặn IP' not in main.friendly_error(RuntimeError(message))
+
+
+def test_retry_transient_profile_error(monkeypatch,tmp_path):
+    calls=[]
+    class Fake:
+        def extract_info(self,url,**kwargs):
+            calls.append(url)
+            if len(calls)==1:raise RuntimeError('Failed to parse JSON')
+            return {'entries':[{'id':'1'},{'id':'2'},{'id':'3'}]}
+    monkeypatch.setattr(main,'downloader',lambda opts:contextlib.nullcontext(Fake()))
+    monkeypatch.setattr(main.time,'sleep',lambda seconds:None)
+    job=main.Job('retry','retryuser',2,tmp_path)
+    assert main.profile_entries(job,time.monotonic()+10)==[{'id':'1'},{'id':'2'}]
+    assert len(calls)==2
+
+
+def test_no_retry_private_or_rate_limit(monkeypatch,tmp_path):
+    for error in ['private account','HTTP Error 429']:
+        calls=[]
+        class Fake:
+            def extract_info(self,*args,**kwargs):
+                calls.append(1);raise RuntimeError(error)
+        monkeypatch.setattr(main,'downloader',lambda opts:contextlib.nullcontext(Fake()))
+        with pytest.raises(RuntimeError):main.profile_entries(main.Job('x','x',2,tmp_path),time.monotonic()+10)
+        assert len(calls)==1
+
+
+def test_profile_hint_uses_verified_author_and_expires(monkeypatch,tmp_path):
+    main.profile_hints.clear()
+    sec_uid='MS4wLjABAAAA'+'a'*64
+    main.remember_profile({'uploader_url':'https://www.tiktok.com/@actual_author','channel_id':sec_uid})
+    calls=[]
+    class Fake:
+        def extract_info(self,url,**kwargs):calls.append(url);return {'entries':[{'id':'1'}]}
+    monkeypatch.setattr(main,'downloader',lambda opts:contextlib.nullcontext(Fake()))
+    job=main.Job('hint','actual_author',2,tmp_path)
+    main.profile_entries(job,time.monotonic()+10)
+    assert calls[-1]=='tiktokuser:'+sec_uid
+    main.profile_hints['actual_author']=(sec_uid,time.time()-1)
+    main.profile_entries(job,time.monotonic()+10)
+    assert calls[-1]=='https://www.tiktok.com/@actual_author'
+    main.profile_hints.clear()

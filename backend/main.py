@@ -2,6 +2,7 @@
 import asyncio
 import contextlib
 import ipaddress
+import logging
 import os
 import re
 import shutil
@@ -52,6 +53,9 @@ slots = threading.BoundedSemaphore(MAX_ACTIVE)
 rate_buckets = defaultdict(deque)
 jobs = {}
 single_dirs = {}
+profile_hints = {}
+log = logging.getLogger("uvicorn.error")
+SEC_UID = re.compile(r"MS4wLjABAAAA[A-Za-z0-9_-]{64}")
 
 # Kiểm tra IP ngay lúc socket kết nối, kể cả sau redirect/DNS resolution.
 # Chỉ bật trong thread tải; không ảnh hưởng HTTP server hay kiểm thử local.
@@ -136,19 +140,98 @@ def normalize_user(value):
     return value
 
 
+def error_code(error):
+    if isinstance(error, UserError):
+        return 'input_or_limit'
+    message = str(error).lower()
+    # Timeout thường kèm chữ webpage; phải phân loại lỗi mạng trước lỗi parse.
+    if any(x in message for x in ['timed out', 'timeout', 'connection', 'resolve', 'network is unreachable']):
+        return 'network'
+    if any(x in message for x in ['private', 'login', 'friends only', 'permission']):
+        return 'login_required'
+    if '429' in message or 'too many requests' in message:
+        return 'tiktok_rate_limit'
+    if any(x in message for x in ['403', 'blocked', 'captcha', 'challenge']):
+        return 'access_denied'
+    if any(x in message for x in ['404', 'not found', 'does not exist', 'unavailable', 'removed', 'not available']):
+        return 'unavailable'
+    if 'secondary user id' in message:
+        return 'profile_id'
+    if any(x in message for x in ['json', 'empty', 'webpage', 'extract']):
+        return 'upstream_response'
+    return 'unknown'
+
+
 def friendly_error(error):
     if isinstance(error, UserError):
         return str(error)
-    message = str(error).lower()
-    if any(x in message for x in ['private', 'login', 'friends only', 'permission']):
-        return 'Nội dung riêng tư hoặc yêu cầu đăng nhập. Chỉ tải nội dung bạn có quyền truy cập; quản trị viên có thể cấu hình cookies.'
-    if any(x in message for x in ['404', 'not found', 'does not exist', 'unavailable', 'removed']):
-        return 'Video/tài khoản không tồn tại, đã bị xoá hoặc không khả dụng ở khu vực này.'
-    if any(x in message for x in ['403', '429', 'blocked', 'challenge', 'captcha', 'empty', 'json', 'webpage', 'secondary user id']):
-        return 'TikTok đang từ chối truy cập hoặc chặn IP. Hãy thử lại sau; quản trị viên có thể cập nhật yt-dlp hoặc cấu hình cookies.'
-    if any(x in message for x in ['timeout', 'timed out', 'connect', 'resolve']):
-        return 'Kết nối TikTok bị gián đoạn hoặc quá thời gian. Vui lòng thử lại sau.'
-    return 'Không tải được nội dung. TikTok có thể đã thay đổi; quản trị viên cần kiểm tra cookies hoặc cập nhật yt-dlp.'
+    code = error_code(error)
+    # Chỉ ghi mã lỗi/loại exception, không ghi cookie, URL ký số hay nội dung HTML.
+    log.warning('TikTok failure code=%s exception=%s', code, type(error).__name__)
+    return {
+        'network': 'Kết nối TikTok bị gián đoạn hoặc quá thời gian. Vui lòng thử lại sau.',
+        'login_required': 'Nội dung riêng tư hoặc yêu cầu đăng nhập. Chỉ tải nội dung bạn có quyền truy cập; quản trị viên có thể cấu hình cookies.',
+        'tiktok_rate_limit': 'TikTok đang giới hạn lượt truy cập (429). Hãy chờ vài phút rồi thử lại.',
+        'access_denied': 'TikTok đang từ chối truy cập từ máy chủ hoặc yêu cầu xác minh. Hãy thử lại sau; cookies hợp lệ có thể giúp nhưng không đảm bảo.',
+        'unavailable': 'Video/tài khoản không tồn tại, đã bị xoá hoặc không khả dụng ở khu vực này.',
+        'profile_id': 'TikTok không trả mã định danh của tài khoản. Hãy lấy thông tin một video công khai của tài khoản ở tab Một video, rồi thử tải theo tài khoản lại trong 15 phút.',
+        'upstream_response': 'TikTok trả dữ liệu rỗng hoặc không đúng định dạng. Đây có thể là lỗi tạm thời hoặc thay đổi của TikTok; chưa thể kết luận IP bị chặn.',
+    }.get(code, 'Không tải được nội dung. Quản trị viên cần kiểm tra lỗi yt-dlp hoặc cookies.')
+
+
+def remember_profile(data):
+    sec_uid = data.get('channel_id') or ''
+    if not SEC_UID.fullmatch(sec_uid):
+        return
+    # Chỉ tin tác giả do extractor trả về, không tin username người dùng gõ trong URL.
+    uploader_url = urlsplit(data.get('uploader_url') or '')
+    author = uploader_url.path.removeprefix('/@').rstrip('/')
+    names = [author, str(data.get('uploader_id') or ''), sec_uid]
+    with lock:
+        now = time.time()
+        for name in names:
+            if USER_RE.fullmatch(name):
+                profile_hints[name.lower()] = (sec_uid, now + TTL)
+        while len(profile_hints) > 128:
+            del profile_hints[next(iter(profile_hints))]
+
+
+def profile_entries(job, deadline):
+    entries = []
+    with lock:
+        hint, expires = profile_hints.get(job.username.lower(), (None, 0))
+    url = 'https://www.tiktok.com/@' + job.username
+    if hint and expires > time.time():
+        url = 'tiktokuser:' + hint
+    # Một số lỗi JSON/profile không được retry bởi extractor_retries của yt-dlp.
+    # Tối đa 3 lần với khoảng nghỉ; không retry lỗi riêng tư, 403 hoặc 429.
+    for attempt in range(3):
+        try:
+            if time.monotonic() >= deadline:
+                raise UserError('Lấy danh sách quá thời gian. Hãy thử lại sau.')
+            opts = options(job.directory, deadline=deadline)
+            opts.update({'extract_flat': True, 'lazy_playlist': True, 'playlistend': job.limit, 'noplaylist': False})
+            entries = []
+            with downloader(opts) as ydl:
+                result = ydl.extract_info(url, download=False)
+                for entry in result.get('entries', []):
+                    if time.monotonic() > deadline:
+                        raise UserError('Lấy danh sách quá thời gian. Hãy thử lại sau.')
+                    if entry and str(entry.get('id', '')).isdigit():
+                        entries.append(entry)
+                    if len(entries) >= job.limit:
+                        break
+            return entries
+        except Exception as exc:
+            code = error_code(exc)
+            log.warning('Profile extraction attempt=%s code=%s', attempt + 1, code)
+            if code not in {'profile_id', 'upstream_response', 'network'} or attempt == 2:
+                raise
+            delay = 2 ** (attempt + 1)
+            if time.monotonic() + delay >= deadline:
+                raise
+            set_job(job, message=f'TikTok phản hồi chưa đầy đủ. Đang thử lại lần {attempt + 2}/3…')
+            time.sleep(delay)
 
 
 def disk_bytes(path):
@@ -231,6 +314,7 @@ class Job:
     failures: list = field(default_factory=list)
     expires: float = 0
     readers: int = 0
+    error_code: str | None = None
 
 
 def set_job(job, **values):
@@ -244,18 +328,7 @@ def run_job(job):
         try:
             set_job(job, state='running', message='Đang lấy danh sách video…')
             deadline = time.monotonic() + TTL
-            opts = options(job.directory, deadline=deadline)
-            opts.update({'extract_flat': True, 'lazy_playlist': True, 'playlistend': job.limit, 'noplaylist': False})
-            with downloader(opts) as ydl:
-                result = ydl.extract_info('https://www.tiktok.com/@' + job.username, download=False)
-                entries = []
-                for entry in result.get('entries', []):
-                    if time.monotonic() > deadline:
-                        raise UserError('Lấy danh sách quá thời gian. Hãy thử lại sau.')
-                    if entry and str(entry.get('id', '')).isdigit():
-                        entries.append(entry)
-                    if len(entries) >= job.limit:
-                        break
+            entries = profile_entries(job, deadline)
             if not entries:
                 raise UserError('Không tìm thấy video công khai. Tài khoản có thể trống, riêng tư hoặc TikTok đang chặn danh sách video.')
             set_job(job, total=len(entries))
@@ -291,7 +364,7 @@ def run_job(job):
             set_job(job, state='done', message=f'Đã tải {job.completed}/{job.total} video.', expires=time.time() + TTL)
         except Exception as exc:
             shutil.rmtree(job.directory, ignore_errors=True)
-            set_job(job, state='error', message=friendly_error(exc), expires=time.time() + TTL)
+            set_job(job, state='error', message=friendly_error(exc), error_code=error_code(exc), expires=time.time() + TTL)
 
 
 def cleanup():
@@ -301,6 +374,9 @@ def cleanup():
             if job.expires and job.expires < now and job.readers == 0:
                 shutil.rmtree(job.directory, ignore_errors=True)
                 del jobs[key]
+        for key, (_, expiry) in list(profile_hints.items()):
+            if expiry < now:
+                del profile_hints[key]
         for key, expiry in list(single_dirs.items()):
             if expiry < now:
                 shutil.rmtree(key, ignore_errors=True)
@@ -385,7 +461,7 @@ def foreground_slot():
 
 @app.get('/api/health')
 def health():
-    return {'status': 'ok', 'max_zip_mb': MAX_ZIP // 1024**2}
+    return {'status': 'ok', 'version': '0.2.0', 'max_zip_mb': MAX_ZIP // 1024**2}
 
 @app.post('/api/video/info')
 def video_info(body: VideoInput):
@@ -395,6 +471,7 @@ def video_info(body: VideoInput):
             url = canonical_video(body.url)
             with downloader(options()) as ydl:
                 data = ydl.extract_info(url, download=False)
+            remember_profile(data)
             return {'title': data.get('title'), 'author': data.get('uploader'), 'thumbnail': data.get('thumbnail'), 'duration': data.get('duration'), 'url': url}
         except Exception as exc:
             raise HTTPException(502, friendly_error(exc)) from None
@@ -446,7 +523,7 @@ def get_job(job_id):
 def job_status(job_id: str):
     with lock:
         job = get_job(job_id)
-        return {'job_id': job.id, 'status': job.state, 'downloaded': job.completed, 'processed': job.processed, 'total': job.total, 'current': job.current, 'message': job.message, 'failures': list(job.failures), 'expires_at': job.expires or None}
+        return {'job_id': job.id, 'status': job.state, 'downloaded': job.completed, 'processed': job.processed, 'total': job.total, 'current': job.current, 'message': job.message, 'failures': list(job.failures), 'expires_at': job.expires or None, 'error_code': job.error_code}
 
 
 def release_zip(job):
