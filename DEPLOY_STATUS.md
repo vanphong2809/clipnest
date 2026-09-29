@@ -1,17 +1,19 @@
-# Trạng thái triển khai
+# Clipnest — đã triển khai
 
-Tên chọn: **clipnest**. Source: `/Users/vanphong/Desktop/tiktok-downloader`.
+Cập nhật: 29/09/2026.
 
-- Backend và frontend đã hoàn thành bản local, có kiểm thử tải thật MP4/MP3/ZIP 2 video.
-- Dockerfile và Blueprint Render Free đã chuẩn bị; Docker image build thành công.
-- GitHub Pages dùng nhánh gh-pages, không cần quyền GitHub Actions.
-- `frontend/config.js` hiện dùng `http://localhost:8000`; không phải URL production.
-- Chưa tạo repo hoặc xuất bản: đang chờ đăng nhập GitHub và Render.
+- Source: `/Users/vanphong/Desktop/tiktok-downloader`
+- GitHub: https://github.com/vanphong2809/clipnest
+- Website: https://vanphong2809.github.io/clipnest/
+- API health: https://clipnest-api.onrender.com/api/health
+- Render dashboard: https://dashboard.render.com/web/srv-datudmmk1f9s739mkt30
 
-Để tiếp tục, chạy:
+GitHub Pages xuất bản từ `gh-pages` (root), HTTPS bật. Frontend dùng API Render khi ở domain public và API localhost khi chạy local. Render dùng Docker, Free, Singapore; root `backend`, Dockerfile `Dockerfile`, build context `.`, health check `/api/health`.
 
-```sh
-/Users/vanphong/Desktop/tiktok-downloader/.tools/gh auth login
-```
+ALLOWED_ORIGINS=`https://vanphong2809.github.io`. Không có cookies TikTok hoặc token trong repo/image. GitHub CLI đã đăng nhập; thông tin xác thực ở cấu hình người dùng, ngoài dự án.
 
-Chọn GitHub.com → HTTPS → đăng nhập qua trình duyệt. Đăng nhập thêm <https://dashboard.render.com> trong tab Codex đã mở. Không gửi token/mật khẩu qua chat. Sau khi hoàn tất, báo lại để tiếp tục tạo repo, deploy Render, cập nhật URL/CORS, bật Pages và kiểm thử production.
+Đã kiểm thử production: health, CORS, metadata, MP4, MP3, ZIP 2/2 video, rate limit. Không cần bạn cấp thêm quyền để sử dụng website hiện tại.
+
+Khi sửa frontend: commit/push main, chạy `git subtree split --prefix frontend` và push commit trả về tới `origin gh-pages`. Khi sửa backend: push main, kiểm tra Render Deploys; nếu chưa tự deploy, chọn Manual Deploy → Deploy latest commit trên Render. Dịch vụ được tạo từ public Git Repository, không cài GitHub App Render hay cấp quyền đọc repo riêng.
+
+Render Free có thể ngủ và mất file/job tạm khi restart; TikTok có thể chặn IP cloud. Giảm limit hoặc cấu hình cookies hợp lệ nếu gặp lỗi; không có đảm bảo cookies sẽ giải quyết mọi lần chặn.

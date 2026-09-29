@@ -36,5 +36,21 @@ Có 1 cảnh báo deprecation từ Starlette TestClient về httpx; không làm 
 ## Chưa xác minh hoặc bị chặn
 
 - Link mẫu cũ `https://vm.tiktok.com/ZTR45GpSF/`, `https://vt.tiktok.com/ZSe4FqkKd` và `https://www.tiktok.com/t/ZTRC5xgJp` đều trả redirect về trang chủ TikTok. API báo lỗi tiếng Việt phù hợp. Chưa có bằng chứng tải thật từ link rút gọn còn hiệu lực; bộ test có kiểm tra resolver hợp lệ bằng redirect giả lập.
-- Chưa deploy GitHub Pages/Render: CLI GitHub và dashboard Render chưa có phiên đăng nhập tại thời điểm lập báo cáo. Do đó chưa kiểm thử trên IP Render hay cấu hình CORS/origin production.
-- Docker build thành công trên Linux arm64. Render sẽ build image cho kiến trúc của nền tảng; cần xác nhận deploy log và health trên Render.
+- Phần chờ đăng nhập của lần kiểm thử local đã được giải quyết; xem kết quả production bên dưới.
+- Docker local build trên Linux arm64; Render đã build và chạy thành công Linux amd64.
+
+## Kiểm thử production sau deploy — 29/09/2026
+
+- GitHub repo public: https://github.com/vanphong2809/clipnest
+- GitHub Pages: https://vanphong2809.github.io/clipnest/ — API GitHub xác nhận `status=built`, source `gh-pages:/`, HTTPS enforced.
+- Backend: https://clipnest-api.onrender.com — Render dashboard xác nhận **Live**, Docker, Free, Singapore.
+- `GET /api/health`: HTTP 200, `status=ok`, `max_zip_mb=300`.
+- CORS preflight từ `https://vanphong2809.github.io`: HTTP 200 và đúng Allow-Origin; từ `https://evil.example`: HTTP 400, không có Allow-Origin.
+- Info video mẫu patrox: HTTP 200, đủ metadata.
+- MP4 thật: HTTP 200, 2.748.647 byte, `video/mp4`.
+- MP3 thật: HTTP 200, 659.114 byte, `audio/mpeg`.
+- Job `@corgibobaa`, limit=2: `done`, downloaded=2, total=2, failures=[]; ZIP HTTP 200, 5.074.586 byte, đúng hai video và CRC hợp lệ.
+- Frontend public đã nhập link thật, gọi Render và hiện metadata/thumbnail/nút tải; console không có lỗi trong lần kiểm tra.
+- Rate limit thực tế trả HTTP 429 cùng Retry-After khi vượt ngưỡng. Request thử giả mạo CF-Connecting-IP/X-Forwarded-For bị edge từ chối HTTP 403; không vượt qua giới hạn.
+
+Kết quả chỉ xác nhận tại thời điểm kiểm thử. TikTok vẫn có thể thay đổi/chặn IP; không dùng kết quả này để đảm bảo khả dụng lâu dài. Không public các media kiểm thử.

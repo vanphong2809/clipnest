@@ -1,5 +1,11 @@
 # Clipnest
 
+- Website: https://vanphong2809.github.io/clipnest/
+- API: https://clipnest-api.onrender.com/api/health
+- Repository: https://github.com/vanphong2809/clipnest
+
+Đã deploy Render Free (Docker, Singapore) và GitHub Pages (nhánh gh-pages) ngày 29/09/2026. Đã kiểm thử tải thật MP4, MP3 và ZIP 2 video trên backend Render; xem TEST_REPORT.md.
+
 Website tải video TikTok bằng FastAPI + yt-dlp, giao diện HTML/CSS/JavaScript thuần. Không có framework hay build step cho frontend.
 
 **Chỉ dùng để tải nội dung của chính mình hoặc nội dung được phép tải; tôn trọng bản quyền và [Điều khoản sử dụng của TikTok](https://www.tiktok.com/legal/page/row/terms-of-service/vi).** Clipnest là công cụ độc lập, không liên kết với TikTok. Công khai không đồng nghĩa với được phép tái sử dụng.
