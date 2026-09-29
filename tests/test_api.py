@@ -143,6 +143,7 @@ def test_short_redirect_success(monkeypatch,short_url):
     ('HTTP Error 403: Forbidden','access_denied'),
     ('HTTP Error 429: Too Many Requests','tiktok_rate_limit'),
     ('This account is private','login_required'),
+    ('Requested format is not available. Use --list-formats','format_unavailable'),
 ])
 def test_precise_error_codes(message,code):
     assert main.error_code(RuntimeError(message))==code
@@ -190,3 +191,24 @@ def test_profile_hint_uses_verified_author_and_expires(monkeypatch,tmp_path):
     main.profile_entries(job,time.monotonic()+10)
     assert calls[-1]=='https://www.tiktok.com/@actual_author'
     main.profile_hints.clear()
+
+
+@pytest.mark.parametrize('audio,formats,expected', [
+    (False, [('silent', 'mp4', 'h264', 'none', 'https')], 'silent'),
+    (False, [('sound', 'mp3', 'none', 'mp3', 'https')], None),
+    (True, [('sound', 'mp3', 'none', 'mp3', 'https')], 'sound'),
+    (False, [('remote_manifest', 'mp4', 'h264', 'aac', 'm3u8_native')], None),
+    (True, [('remote_manifest', 'mp4', 'h264', 'aac', 'm3u8_native')], None),
+    (False, [('silent', 'mp4', 'h264', 'none', 'https'), ('full', 'mp4', 'h264', 'aac', 'https')], 'full'),
+])
+def test_direct_format_selection(audio, formats, expected):
+    data = {'id': '123', 'title': 'Fixture', 'extractor': 'TikTok', 'webpage_url': 'https://www.tiktok.com/@abc/video/123',
+            'formats': [dict(zip(('format_id', 'ext', 'vcodec', 'acodec', 'protocol'), f),
+                             url='https://example.com/' + f[0]) for f in formats]}
+    with main.downloader(main.options(audio=audio)) as ydl:
+        if expected is None:
+            with pytest.raises(main.yt_dlp.utils.ExtractorError, match='Requested format is not available'):
+                ydl.process_ie_result(data, download=False)
+        else:
+            result = ydl.process_ie_result(data, download=False)
+            assert result['format_id'] == expected

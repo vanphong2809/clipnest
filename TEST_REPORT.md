@@ -54,3 +54,11 @@ Có 1 cảnh báo deprecation từ Starlette TestClient về httpx; không làm 
 - Rate limit thực tế trả HTTP 429 cùng Retry-After khi vượt ngưỡng. Request thử giả mạo CF-Connecting-IP/X-Forwarded-For bị edge từ chối HTTP 403; không vượt qua giới hạn.
 
 Kết quả chỉ xác nhận tại thời điểm kiểm thử. TikTok vẫn có thể thay đổi/chặn IP; không dùng kết quả này để đảm bảo khả dụng lâu dài. Không public các media kiểm thử.
+
+## Sửa lỗi tài khoản paohan85 — 29/09/2026
+
+- Lỗi profile tạm thời được retry có giới hạn; lỗi thiếu mã tài khoản có hướng dẫn lấy thông tin một video để xác định tác giả.
+- Render 0.2.0 thử username paohan85, limit=2: ZIP hợp lệ có video 7690912206493338888 và một bản ghi lỗi cho bài 7690245358428933383.
+- Chẩn đoán bài thứ hai bằng yt-dlp process=False: chỉ có định dạng audio/mp3, không có MP4. Không phải bằng chứng tài khoản bị xoá hay IP bị chặn.
+- Bản 0.2.1 local: info HTTP 200, available_formats={mp4:false,mp3:true}; MP3 HTTP 200, 902445 bytes.
+- Bổ sung kiểm thử bộ chọn định dạng: video im lặng, chỉ âm thanh, ưu tiên video có tiếng, từ chối HLS ở cả hai chế độ. Tổng 47 tests đạt trên Python 3.11.

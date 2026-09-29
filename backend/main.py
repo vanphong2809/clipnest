@@ -153,6 +153,8 @@ def error_code(error):
         return 'tiktok_rate_limit'
     if any(x in message for x in ['403', 'blocked', 'captcha', 'challenge']):
         return 'access_denied'
+    if 'requested format is not available' in message:
+        return 'format_unavailable'
     if any(x in message for x in ['404', 'not found', 'does not exist', 'unavailable', 'removed', 'not available']):
         return 'unavailable'
     if 'secondary user id' in message:
@@ -173,6 +175,7 @@ def friendly_error(error):
         'login_required': 'Nội dung riêng tư hoặc yêu cầu đăng nhập. Chỉ tải nội dung bạn có quyền truy cập; quản trị viên có thể cấu hình cookies.',
         'tiktok_rate_limit': 'TikTok đang giới hạn lượt truy cập (429). Hãy chờ vài phút rồi thử lại.',
         'access_denied': 'TikTok đang từ chối truy cập từ máy chủ hoặc yêu cầu xác minh. Hãy thử lại sau; cookies hợp lệ có thể giúp nhưng không đảm bảo.',
+        'format_unavailable': 'TikTok không cung cấp định dạng tải phù hợp cho bài này. Bài có thể chỉ có âm thanh/ảnh hoặc thiếu luồng MP4; bạn có thể thử tải MP3.',
         'unavailable': 'Video/tài khoản không tồn tại, đã bị xoá hoặc không khả dụng ở khu vực này.',
         'profile_id': 'TikTok không trả mã định danh của tài khoản. Hãy lấy thông tin một video công khai của tài khoản ở tab Một video, rồi thử tải theo tài khoản lại trong 15 phút.',
         'upstream_response': 'TikTok trả dữ liệu rỗng hoặc không đúng định dạng. Đây có thể là lỗi tạm thời hoặc thay đổi của TikTok; chưa thể kết luận IP bị chặn.',
@@ -261,13 +264,15 @@ def options(directory=None, audio=False, deadline=None):
         'noplaylist': True, 'cachedir': False, 'proxy': '',
         'max_filesize': MAX_VIDEO, 'progress_hooks': [check_progress],
         # Chỉ tải HTTP MP4: ffmpeg chỉ đọc file local, không đọc URL/manifest.
-        'format': 'best[ext=mp4][protocol=https]/best[ext=mp4][protocol=http]',
+        'format': 'best[ext=mp4][protocol=https]/best[ext=mp4][protocol=http]/bestvideo[ext=mp4][protocol=https]/bestvideo[ext=mp4][protocol=http]',
         'outtmpl': str(directory / '%(id)s.%(ext)s') if directory else None,
         'restrictfilenames': True, 'overwrites': False,
     }
     if os.getenv('FFMPEG_LOCATION'):
         opts['ffmpeg_location'] = os.environ['FFMPEG_LOCATION']
     if audio:
+        # Cho phép tải âm thanh khi bài không có video; vẫn chỉ dùng HTTP trực tiếp.
+        opts['format'] = 'bestaudio[protocol=https]/bestaudio[protocol=http]/best[protocol=https]/best[protocol=http]'
         opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
     return opts
 
@@ -461,7 +466,7 @@ def foreground_slot():
 
 @app.get('/api/health')
 def health():
-    return {'status': 'ok', 'version': '0.2.0', 'max_zip_mb': MAX_ZIP // 1024**2}
+    return {'status': 'ok', 'version': '0.2.1', 'max_zip_mb': MAX_ZIP // 1024**2}
 
 @app.post('/api/video/info')
 def video_info(body: VideoInput):
@@ -469,10 +474,17 @@ def video_info(body: VideoInput):
     with foreground_slot():
         try:
             url = canonical_video(body.url)
-            with downloader(options()) as ydl:
+            # Metadata vẫn hữu ích khi bài chỉ có âm thanh hoặc không có MP4.
+            info_options = options()
+            info_options['ignore_no_formats_error'] = True
+            with downloader(info_options) as ydl:
                 data = ydl.extract_info(url, download=False)
             remember_profile(data)
-            return {'title': data.get('title'), 'author': data.get('uploader'), 'thumbnail': data.get('thumbnail'), 'duration': data.get('duration'), 'url': url}
+            return {'title': data.get('title'), 'author': data.get('uploader'), 'thumbnail': data.get('thumbnail'), 'duration': data.get('duration'), 'url': url,
+                    'available_formats': {
+                        'mp4': any(f.get('ext') == 'mp4' and f.get('vcodec') != 'none' and f.get('protocol') in {'http', 'https'} for f in data.get('formats', [])),
+                        'mp3': any(f.get('acodec') != 'none' and f.get('protocol') in {'http', 'https'} for f in data.get('formats', [])),
+                    }}
         except Exception as exc:
             raise HTTPException(502, friendly_error(exc)) from None
 

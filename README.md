@@ -214,3 +214,23 @@ Thử lại MP4, MP3, link rút gọn và user limit=2 bằng nội dung bạn c
 - Render có quota băng thông/build và có thể đình chỉ dịch vụ Free phát sinh lượng traffic ra ngoài cao. Nếu tài khoản đã gắn phương thức thanh toán, có thể có phí vượt quota; hãy kiểm tra spend limit trong dashboard. Dự án không tự nâng gói hay mua dịch vụ.
 - Tải lớn có thể vượt 80 MiB/video, 300 MiB/ZIP hoặc giới hạn RAM phía trình duyệt. Giảm số lượng video nếu gặp lỗi.
 - Không có tài khoản ứng dụng; job_id ngẫu nhiên đóng vai trò link khó đoán. Không chia sẻ job_id nếu không muốn người khác tải ZIP trong thời gian còn hiệu lực.
+
+## Khi tải theo tài khoản lỗi nhưng một video vẫn mở được
+
+Thông báo “chặn IP” trước đây đã được tách thành lỗi mạng, 429, từ chối truy cập/xác minh, thiếu mã tài khoản và dữ liệu TikTok sai định dạng. Không thể suy ra chặn IP chỉ từ lỗi JSON hoặc lỗi đọc trang.
+
+Backend thử lại tối đa 3 lần khi lỗi mạng/parse/mã tài khoản, nghỉ 2 rồi 4 giây; không retry 403, 429 hay nội dung riêng tư. Không tự đổi IP hoặc bỏ cơ chế chống SSRF.
+
+Nếu báo không lấy được mã định danh tài khoản:
+
+1. Mở tab **Một video**, dán link một video công khai của chính tài khoản cần tải, bấm **Lấy video**.
+2. Khi hiện thông tin video, chuyển sang **Theo tài khoản**, nhập username và thử limit=2.
+3. Backend nhớ mã tác giả do yt-dlp xác nhận trong 15 phút (tối đa 128 mục trong RAM) để truy vấn danh sách. Không dùng username tùy ý trong URL để xác định tác giả.
+
+Cách này chỉ hỗ trợ bước nhận diện tài khoản; nếu TikTok chặn cả API danh sách thì vẫn có thể thất bại. Cookies có thể hữu ích với phiên đăng nhập hợp lệ nhưng không đảm bảo; không gửi cookies trong chat hay commit Git. Stable yt-dlp 2026.08.19 vẫn là bản stable mới nhất được kiểm tra ngày 29/09/2026. Vấn đề lấy danh sách có báo cáo ở [yt-dlp #17500](https://github.com/yt-dlp/yt-dlp/issues/17500).
+
+### Bài chỉ có âm thanh hoặc thiếu MP4
+
+API thông tin vẫn trả metadata và `available_formats` khi không có MP4. Giao diện chỉ bật nút có định dạng phù hợp. MP3 có thể tải trực tiếp từ luồng âm thanh; MP4 chấp nhận cả video không có tiếng. Chỉ dùng HTTP/HTTPS trực tiếp, không chuyển URL manifest cho ffmpeg.
+
+Bài `7690245358428933383` của tài khoản mẫu `paohan85` hiện chỉ được yt-dlp trả một luồng MP3. Không thể coi lỗi “Requested format is not available” là tài khoản bị xoá hay chặn IP. Bài thiếu MP4 sẽ được ghi vào `LOI_TAI.txt` trong ZIP; ứng dụng không tự dựng video từ ảnh.
