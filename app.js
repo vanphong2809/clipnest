@@ -2,7 +2,15 @@
 const $ = id => document.getElementById(id);
 const API = window.CLIPNEST_CONFIG.API_BASE_URL.replace(/\/$/, '');
 let selectedVideo = null;
-let availableFormats = {mp4: true, mp3: true};
+let availableFormats = {mp4: true, mp3: true, images: false};
+function updateDownloadButtons(busy = false) {
+  for (const [id, format] of [['download-video', 'mp4'], ['download-audio', 'mp3'], ['download-images', 'images']]) {
+    $(id).disabled = busy || !availableFormats[format];
+  }
+  $('download-images').hidden = !availableFormats.images;
+  $('download-audio').hidden = !!availableFormats.images;
+  $('download-video').hidden = !!availableFormats.images && !availableFormats.mp4;
+}
 let activeJob = null;
 let polling = false;
 function message(id, text, error = false) {
@@ -50,35 +58,34 @@ for (const name of ['video', 'user']) {
 }
 $('video-form').onsubmit = async event => {
   event.preventDefault(); $('info-button').disabled = true; $('video-result').hidden = true; selectedVideo = null;
-  message('video-message', 'Đang lấy thông tin video… Lần đầu có thể lâu hơn khi máy chủ đang khởi động.');
+  message('video-message', 'Đang lấy thông tin bài đăng… Lần đầu có thể lâu hơn khi máy chủ đang khởi động.');
   try {
     const response = await request('/api/video/info', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: $('video-url').value.trim()}) });
     const data = await response.json(); selectedVideo = data.url;
     availableFormats = data.available_formats || {mp4: true, mp3: true};
-    $('download-video').disabled = !availableFormats.mp4;
-    $('download-audio').disabled = !availableFormats.mp3;
+    updateDownloadButtons();
     $('video-title').textContent = data.title || 'Video TikTok';
     const duration = Number(data.duration);
-    $('video-meta').textContent = [data.author || 'Tác giả chưa xác định', Number.isFinite(duration) && duration > 0 ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : null].filter(Boolean).join(' · ');
+    $('video-meta').textContent = [data.author || 'Tác giả chưa xác định', data.image_count ? `${data.image_count} ảnh` : null, Number.isFinite(duration) && duration > 0 ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : null].filter(Boolean).join(' · ');
     const thumb = $('thumbnail'); thumb.hidden = true; thumb.removeAttribute('src');
     if (data.thumbnail) { try { const url = new URL(data.thumbnail); if (url.protocol === 'https:') { thumb.src = url.href; thumb.hidden = false; } } catch {} }
     thumb.onerror = () => { thumb.hidden = true; };
     $('video-result').hidden = false;
-    message('video-message', availableFormats.mp4 ? '' : availableFormats.mp3 ? 'Bài này hiện chỉ có âm thanh để tải. Bạn có thể tải MP3 bên dưới.' : 'TikTok chưa cung cấp định dạng MP4/MP3 có thể tải cho bài này.');
+    message('video-message', availableFormats.images ? `Có ${data.image_count} ảnh. ZIP giữ đúng thứ tự, không kèm nhạc.` : availableFormats.mp4 ? '' : availableFormats.mp3 ? 'Bài này hiện chỉ có âm thanh để tải. Bạn có thể tải MP3 bên dưới.' : 'TikTok chưa cung cấp định dạng MP4/MP3 có thể tải cho bài này.');
   } catch (error) { message('video-message', errorText(error), true); }
   finally { $('info-button').disabled = false; }
 };
-for (const [button, format] of [['download-video', 'mp4'], ['download-audio', 'mp3']]) {
+for (const [button, format] of [['download-video', 'mp4'], ['download-audio', 'mp3'], ['download-images', 'images']]) {
   $(button).onclick = async () => {
     if (!selectedVideo) return;
     const url = selectedVideo;
-    $('download-video').disabled = $('download-audio').disabled = true;
-    message('video-message', `Đang chuẩn bị file ${format.toUpperCase()}… Vui lòng giữ trang này mở.`);
+    updateDownloadButtons(true);
+    message('video-message', `Đang chuẩn bị file ${format === 'images' ? 'ZIP ảnh' : format.toUpperCase()}… Vui lòng giữ trang này mở.`);
     try {
-      await saveFile(`/api/video/download?url=${encodeURIComponent(url)}&format=${format}`, `clipnest.${format}`);
+      await saveFile(`/api/video/download?url=${encodeURIComponent(url)}&format=${format}`, `clipnest.${format === 'images' ? 'zip' : format}`);
       message('video-message', 'File đã sẵn sàng. Kiểm tra mục tải xuống của trình duyệt.');
     } catch (error) { message('video-message', errorText(error), true); }
-    finally { $('download-video').disabled = !availableFormats.mp4; $('download-audio').disabled = !availableFormats.mp3; }
+    finally { updateDownloadButtons(); }
   };
 }
 function rememberJob(id) { try { if (id) sessionStorage.setItem('clipnest-job', id); else sessionStorage.removeItem('clipnest-job'); } catch {} }
@@ -94,10 +101,10 @@ async function pollJob() {
         $('job-label').textContent = job.message;
         $('job-count').textContent = `${job.downloaded} / ${job.total}`;
         $('progress').max = job.total || 1; $('progress').value = job.processed;
-        $('job-detail').textContent = job.status === 'queued' ? 'Máy chủ đang xử lý các tác vụ trước.' : `Đã xử lý ${job.processed}/${job.total} video · ${job.failures.length} lỗi.`;
+        $('job-detail').textContent = job.status === 'queued' ? 'Máy chủ đang xử lý các tác vụ trước.' : `Đã xử lý ${job.processed}/${job.total} bài · ${job.failures.length} lỗi.`;
         if (job.status === 'done') {
           $('download-zip').hidden = false; $('start-button').disabled = false;
-          message('user-message', job.failures.length ? `Đã tải ${job.downloaded}/${job.total} video. ZIP kèm danh sách lỗi; file sẽ hết hạn sau 15 phút.` : 'File ZIP đã sẵn sàng. Tải về trong vòng 15 phút.');
+          message('user-message', job.failures.length ? `Đã tải ${job.downloaded}/${job.total} bài. ZIP kèm danh sách lỗi; file sẽ hết hạn sau 15 phút.` : 'File ZIP đã sẵn sàng. Tải về trong vòng 15 phút.');
           break;
         }
         if (job.status === 'error') { throw new Error(job.message); }
