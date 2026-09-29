@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: clipnest-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: MAX_CONCURRENT_JOBS
+        value: "2"
+      - key: MAX_ZIP_MB
+        value: "300"
+      - key: MAX_STORAGE_MB
+        value: "1024"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TRUST_RENDER_PROXY
+        value: "true"

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tải video TikTok của bạn thành MP4, MP3 hoặc bộ sưu tập ZIP.">
+  <meta name="referrer" content="no-referrer">
+  <title>Clipnest — Lưu những video của bạn</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232435e8'/%3E%3Cpath d='M16 7v13m-5-5 5 5 5-5M8 23v3h16v-3' fill='none' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css"><script src="config.js" defer></script><script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./" aria-label="Clipnest trang chủ"><span class="brand-mark">↓</span>clipnest<span class="brand-period">.</span></a><span class="header-note">Video của bạn. Luôn bên bạn.</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">GÓC LƯU TRỮ CỦA BẠN</p><h1>Một đường link.<br>Mang video về máy<span>.</span></h1><p class="intro-description">Lưu video TikTok thành MP4, tách âm thanh MP3<br class="desktop-break"> hoặc tải nhiều video trong một file ZIP.</p></section>
+    <section class="workspace" aria-label="Công cụ tải video">
+      <div class="tabs" role="tablist" aria-label="Chế độ tải">
+        <button id="tab-video" class="tab active" role="tab" aria-selected="true" aria-controls="panel-video">01 <span>Một video</span></button>
+        <button id="tab-user" class="tab" role="tab" aria-selected="false" aria-controls="panel-user" tabindex="-1">02 <span>Theo tài khoản</span></button>
+      </div>
+      <div id="panel-video" class="panel" role="tabpanel" aria-labelledby="tab-video">
+        <form id="video-form"><label for="video-url">Link video TikTok</label><div class="input-row"><input id="video-url" name="url" type="url" placeholder="https://www.tiktok.com/@ban/video/…" required maxlength="2048" autocomplete="off"><button class="primary" id="info-button" type="submit">Lấy video <span aria-hidden="true">↗</span></button></div><p class="hint">Hỗ trợ cả link rút gọn vm.tiktok.com và vt.tiktok.com.</p></form>
+        <div id="video-message" class="message" role="status" aria-live="polite" hidden></div>
+        <article id="video-result" class="result" hidden><img id="thumbnail" alt="Ảnh thu nhỏ của video" referrerpolicy="no-referrer"><div class="result-content"><span class="mini-label">VIDEO CỦA BẠN</span><h2 id="video-title"></h2><p id="video-meta"></p><div class="download-actions"><button id="download-video" class="primary">Tải MP4 <span aria-hidden="true">↓</span></button><button id="download-audio" class="secondary">Chỉ âm thanh · MP3</button></div></div></article>
+        <div class="format-note"><span class="file-tag">MP4</span><p>Video để lưu giữ.<br><span>Thêm bản MP3 khi bạn chỉ cần âm thanh.</span></p><span class="line-icon" aria-hidden="true">↓</span></div>
+      </div>
+      <div id="panel-user" class="panel" role="tabpanel" aria-labelledby="tab-user" hidden>
+        <form id="user-form"><div class="user-fields"><div><label for="username">Username, userId hoặc link tài khoản</label><input id="username" placeholder="@username hoặc link hồ sơ TikTok" required maxlength="2048" autocomplete="off"></div><div><label for="limit">Số video tối đa</label><input id="limit" type="number" min="1" max="100" step="1" value="20" required></div></div><p class="hint">Từ 1 đến 100 video công khai. Thứ tự do TikTok cung cấp.</p><button id="start-button" class="primary" type="submit">Tạo file ZIP <span aria-hidden="true">↓</span></button></form>
+        <div id="user-message" class="message" role="status" aria-live="polite" hidden></div>
+        <section id="job-progress" class="job-card" hidden aria-label="Tiến trình tải"><div class="job-heading"><strong id="job-label">Đang chờ lượt…</strong><span id="job-count">0 / 0</span></div><progress id="progress" value="0" max="1">0%</progress><p id="job-detail" class="hint"></p><button id="download-zip" class="primary" hidden>Tải file ZIP <span aria-hidden="true">↓</span></button></section>
+        <div class="format-note"><span class="file-tag">ZIP</span><p>Cả bộ sưu tập, một lần tải.<br><span>File sẵn sàng trong 15 phút sau khi hoàn tất.</span></p><span class="line-icon" aria-hidden="true">↓</span></div>
+      </div>
+    </section>
+    <aside class="permission-note"><span aria-hidden="true">ⓘ</span><p>Chỉ tải nội dung của chính bạn hoặc nội dung được phép tải. Hãy tôn trọng bản quyền và <a href="https://www.tiktok.com/legal/page/row/terms-of-service/vi" target="_blank" rel="noopener noreferrer">Điều khoản sử dụng của TikTok</a>.</p></aside>
+  </main>
+  <footer><span>© <span id="year">2026</span> Clipnest</span><span>Công cụ độc lập, không liên kết với TikTok.</span></footer>
+</body></html>

@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+**/cookies*
+**/*token*
+.venv/
+.venv*/
+.tools/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+*.mp4
+*.mp3
+*.zip
+work/
