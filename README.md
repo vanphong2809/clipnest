@@ -64,7 +64,7 @@ cd ~/Desktop/tiktok-downloader
 python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 ```
 
-Truy cập <http://localhost:5500>. API kiểm tra tại <http://localhost:8000/api/health>. Không mở trực tiếp `index.html` bằng `file://` vì origin không hợp lệ. `frontend/config.js` phải trỏ tới `http://localhost:8000` khi chạy local; sau deploy đổi về URL HTTPS Render.
+Truy cập <http://localhost:5500>. API kiểm tra tại <http://localhost:8000/api/health>. Không mở trực tiếp `index.html` bằng `file://` vì origin không hợp lệ. `frontend/config.js` tự dùng `http://localhost:8000` khi mở localhost/127.0.0.1, và dùng `https://clipnest-api.onrender.com` khi truy cập website public.
 
 Chạy Docker:
 
@@ -141,18 +141,18 @@ Nếu repo đã được tạo hoặc đã có commit trong phiên xây dựng, 
 
 ### 2. Backend Render
 
-Trong [Render Dashboard](https://dashboard.render.com), đăng nhập → New → Blueprint → kết nối repo vừa tạo. `render.yaml` đã chọn Docker, Free, Singapore và health check. Nhập `ALLOWED_ORIGINS=https://GITHUB_USERNAME.github.io` (origin không bao gồm `/clipnest`).
+Trong [Render Dashboard](https://dashboard.render.com), đăng nhập → New → Blueprint → kết nối repo vừa tạo. `render.yaml` đã chọn Docker, Free, Singapore và health check. Nhập `ALLOWED_ORIGINS=https://vanphong2809.github.io` (origin không bao gồm `/clipnest`).
 
 Có thể tạo Web Service thủ công: runtime Docker, Dockerfile `./backend/Dockerfile`, Docker build context `./backend`, plan **Free**, health check `/api/health`. Đặt `TRUST_RENDER_PROXY=true`; Render cung cấp `RENDER=true`. Không nâng gói trả phí nếu chưa chủ động muốn.
 
-Lấy URL thực tế Render cấp; tên dự kiến là `clipnest-api` nhưng suffix/domain thực tế phụ thuộc tên còn trống. Kiểm tra `https://URL-THUC-TE.onrender.com/api/health` trả `{"status":"ok",…}`.
+Lấy URL thực tế Render cấp; tên dự kiến là `clipnest-api` nhưng suffix/domain thực tế phụ thuộc tên còn trống. Kiểm tra `https://clipnest-api.onrender.com/api/health` trả `{"status":"ok",…}`.
 
 ### 3. Frontend Pages
 
 Sửa `frontend/config.js`:
 
 ```js
-window.CLIPNEST_CONFIG = { API_BASE_URL: 'https://URL-THUC-TE.onrender.com' };
+window.CLIPNEST_CONFIG = { API_BASE_URL: 'https://clipnest-api.onrender.com' };
 ```
 
 Frontend được xuất bản từ nhánh **gh-pages**, không cần build step hay quyền GitHub Actions. Sau khi sửa API_BASE_URL, chạy:
@@ -163,10 +163,10 @@ git commit -m "Configure deployed API"
 git push origin main
 git subtree split --prefix frontend -b gh-pages
 git push origin gh-pages
-gh api --method POST repos/GITHUB_USERNAME/clipnest/pages -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
+gh api --method POST repos/vanphong2809/clipnest/pages -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
 ```
 
-Nếu Pages đã có, dùng `PUT` để cập nhật cấu hình thay vì `POST`. Sau mỗi lần sửa frontend: commit vào main, chạy `git subtree split --prefix frontend` để lấy commit rồi push commit đó lên gh-pages. Không cần build JavaScript. Chờ Pages báo build thành công. Website mặc định: `https://GITHUB_USERNAME.github.io/clipnest/`.
+Nếu Pages đã có, dùng `PUT` để cập nhật cấu hình thay vì `POST`. Sau mỗi lần sửa frontend: commit vào main, chạy `git subtree split --prefix frontend` để lấy commit rồi push commit đó lên gh-pages. Không cần build JavaScript. Chờ Pages báo build thành công. Website mặc định: `https://vanphong2809.github.io/clipnest/`.
 
 Kiểm tra từ frontend thật: info, MP4, MP3, user limit=2, tiến trình, ZIP, origin CORS. Kiểm tra vượt rate limit và xác thực IP proxy sau triển khai. Tải được local không đảm bảo tải được từ IP cloud của Render.
 
@@ -176,7 +176,7 @@ Không cần mua domain để dùng website. Nếu bạn đã có domain:
 
 1. Thêm `frontend/CNAME` chứa đúng hostname, ví dụ `clips.example.com`, rồi commit/push.
 2. Repo → Settings → Pages → Custom domain: nhập cùng hostname, lưu. Nhánh gh-pages cũng phải chứa CNAME; bước subtree split/push sẽ mang file từ frontend sang nhánh này.
-3. Với subdomain, DNS CNAME `clips` trỏ `GITHUB_USERNAME.github.io` (không có đường dẫn repo).
+3. Với subdomain, DNS CNAME `clips` trỏ `vanphong2809.github.io` (không có đường dẫn repo).
 4. Với apex/root domain, đặt bốn A record trỏ `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`. Xoá record xung đột. Xem [hướng dẫn DNS chính thức](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
 5. Chờ DNS/chứng chỉ hoàn tất, bật **Enforce HTTPS**. Nên xác minh quyền sở hữu domain trong GitHub trước khi gắn DNS.
 6. Thêm `https://clips.example.com` vào `ALLOWED_ORIGINS` trên Render và redeploy.
