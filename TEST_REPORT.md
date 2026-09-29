@@ -62,3 +62,7 @@ Kết quả chỉ xác nhận tại thời điểm kiểm thử. TikTok vẫn c�
 - Chẩn đoán bài thứ hai bằng yt-dlp process=False: chỉ có định dạng audio/mp3, không có MP4. Không phải bằng chứng tài khoản bị xoá hay IP bị chặn.
 - Bản 0.2.1 local: info HTTP 200, available_formats={mp4:false,mp3:true}; MP3 HTTP 200, 902445 bytes.
 - Bổ sung kiểm thử bộ chọn định dạng: video im lặng, chỉ âm thanh, ưu tiên video có tiếng, từ chối HLS ở cả hai chế độ. Tổng 47 tests đạt trên Python 3.11.
+- Render 0.2.1 (commit bbf9b34): health OK; job paohan85 limit=2 tạo ZIP 1244166 bytes, CRC hợp lệ, gồm 001_7690912206493338888.mp4 và LOI_TAI.txt. Bài thứ hai được phân loại thiếu định dạng, không còn báo xoá/chặn IP.
+- Render info bài thứ hai: HTTP 200, mp4=false/mp3=true; MP3 HTTP 200, 902445 bytes. Cả MP4 trong ZIP và MP3 tải từ Render đều giải mã bằng ffmpeg không lỗi.
+- GitHub Pages đã build commit frontend e31c7f0; kiểm tra browser thực tế thấy thông báo chỉ có âm thanh, nút MP4 disabled, MP3 enabled.
+- Kết quả chỉ xác nhận tại thời điểm kiểm thử; TikTok có thể thay đổi/chặn yêu cầu về sau. Không thể đảm bảo tải mọi bài.

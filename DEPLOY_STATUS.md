@@ -17,3 +17,9 @@ ALLOWED_ORIGINS=`https://vanphong2809.github.io`. Không có cookies TikTok ho�
 Khi sửa frontend: commit/push main, chạy `git subtree split --prefix frontend` và push commit trả về tới `origin gh-pages`. Khi sửa backend: push main, kiểm tra Render Deploys; nếu chưa tự deploy, chọn Manual Deploy → Deploy latest commit trên Render. Dịch vụ được tạo từ public Git Repository, không cài GitHub App Render hay cấp quyền đọc repo riêng.
 
 Render Free có thể ngủ và mất file/job tạm khi restart; TikTok có thể chặn IP cloud. Giảm limit hoặc cấu hình cookies hợp lệ nếu gặp lỗi; không có đảm bảo cookies sẽ giải quyết mọi lần chặn.
+
+## Bản sửa 0.2.1
+
+- Backend Render đã triển khai commit bbf9b34, health trả version 0.2.1.
+- GitHub Pages đã build frontend e31c7f0.
+- Đã kiểm tra lại paohan85 limit=2: ZIP có 1 MP4 + ghi chú bài thứ hai chỉ có luồng MP3; MP3 tải riêng thành công. Chi tiết trong TEST_REPORT.md.
