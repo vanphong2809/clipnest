@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const API = window.CLIPNEST_CONFIG.API_BASE_URL.replace(/\/$/, '');
 let selectedVideo = null;
+let availableFormats = {mp4: true, mp3: true};
 let activeJob = null;
 let polling = false;
 function message(id, text, error = false) {
@@ -53,13 +54,17 @@ $('video-form').onsubmit = async event => {
   try {
     const response = await request('/api/video/info', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: $('video-url').value.trim()}) });
     const data = await response.json(); selectedVideo = data.url;
+    availableFormats = data.available_formats || {mp4: true, mp3: true};
+    $('download-video').disabled = !availableFormats.mp4;
+    $('download-audio').disabled = !availableFormats.mp3;
     $('video-title').textContent = data.title || 'Video TikTok';
     const duration = Number(data.duration);
     $('video-meta').textContent = [data.author || 'Tác giả chưa xác định', Number.isFinite(duration) && duration > 0 ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : null].filter(Boolean).join(' · ');
     const thumb = $('thumbnail'); thumb.hidden = true; thumb.removeAttribute('src');
     if (data.thumbnail) { try { const url = new URL(data.thumbnail); if (url.protocol === 'https:') { thumb.src = url.href; thumb.hidden = false; } } catch {} }
     thumb.onerror = () => { thumb.hidden = true; };
-    $('video-result').hidden = false; message('video-message', '');
+    $('video-result').hidden = false;
+    message('video-message', availableFormats.mp4 ? '' : availableFormats.mp3 ? 'Bài này hiện chỉ có âm thanh để tải. Bạn có thể tải MP3 bên dưới.' : 'TikTok chưa cung cấp định dạng MP4/MP3 có thể tải cho bài này.');
   } catch (error) { message('video-message', errorText(error), true); }
   finally { $('info-button').disabled = false; }
 };
@@ -73,7 +78,7 @@ for (const [button, format] of [['download-video', 'mp4'], ['download-audio', 'm
       await saveFile(`/api/video/download?url=${encodeURIComponent(url)}&format=${format}`, `clipnest.${format}`);
       message('video-message', 'File đã sẵn sàng. Kiểm tra mục tải xuống của trình duyệt.');
     } catch (error) { message('video-message', errorText(error), true); }
-    finally { $('download-video').disabled = $('download-audio').disabled = false; }
+    finally { $('download-video').disabled = !availableFormats.mp4; $('download-audio').disabled = !availableFormats.mp3; }
   };
 }
 function rememberJob(id) { try { if (id) sessionStorage.setItem('clipnest-job', id); else sessionStorage.removeItem('clipnest-job'); } catch {} }
