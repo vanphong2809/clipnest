@@ -23,3 +23,8 @@ Render Free có thể ngủ và mất file/job tạm khi restart; TikTok có th�
 - Backend Render đã triển khai commit bbf9b34, health trả version 0.2.1.
 - GitHub Pages đã build frontend e31c7f0.
 - Đã kiểm tra lại paohan85 limit=2: ZIP có 1 MP4 + ghi chú bài thứ hai chỉ có luồng MP3; MP3 tải riêng thành công. Chi tiết trong TEST_REPORT.md.
+
+## Bản tải slideshow 0.3.0 — 30/09/2026
+
+- Render triển khai b9804a9; health version 0.3.0, thử tải riêng bộ 15 ảnh và tài khoản có cả video/ảnh thành công.
+- Frontend hỗ trợ nút “Tải bộ ảnh · ZIP”, giữ đúng thứ tự, không kèm nhạc; URL app.js có phiên bản để trình duyệt không dùng mã cũ.

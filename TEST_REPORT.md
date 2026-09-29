@@ -72,3 +72,5 @@ Kết quả chỉ xác nhận tại thời điểm kiểm thử. TikTok vẫn c�
 - Local, bài paohan85/7690245358428933383: info báo 15 ảnh; ZIP ảnh HTTP 200, 7129364 bytes, 15 JPG đánh số 001–015, CRC hợp lệ, không MP3.
 - Local, paohan85 limit=2: thành công 2/2 bài, ZIP gồm một MP4 và thư mục 15 ảnh của slideshow, không có LOI_TAI.txt. Giải mã MP4 và toàn bộ 15 ảnh bằng ffmpeg thành công.
 - 58 kiểm thử đạt: bổ sung thứ tự/nội dung ảnh, URL photo, domain/redirect ảnh chống SSRF, giới hạn dung lượng, từ chối HTML giả ảnh, dọn file tải riêng và ZIP kết hợp video/ảnh.
+- Render 0.3.0 (b9804a9): ZIP riêng chứa 15 ảnh JPG, 7129364 bytes, CRC hợp lệ; bytes từng ảnh giống bản local đã giải mã kiểm tra.
+- Render paohan85 limit=2: thành công 2/2, không lỗi; ZIP 8373948 bytes gồm một MP4 và thư mục 15 ảnh, không MP3.
