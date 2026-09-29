@@ -23,6 +23,7 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 import yt_dlp
+from yt_dlp.extractor.tiktok import TikTokIE
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -44,7 +45,7 @@ ORIGINS = [s.strip().rstrip('/') for s in os.getenv('ALLOWED_ORIGINS', 'http://l
 if '*' in ORIGINS:
     raise RuntimeError('ALLOWED_ORIGINS phải liệt kê origin cụ thể.')
 HOSTS = {'tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com', 'm.tiktok.com'}
-VIDEO_PATH = re.compile(r'^/@[A-Za-z0-9_.-]+/video/\d+/?$')
+VIDEO_PATH = re.compile(r'^/@[A-Za-z0-9_.-]+/(?:video|photo)/\d+/?$')
 USER_RE = re.compile(r'^(?:[A-Za-z0-9_.]{1,64}|MS4wLjABAAAA[A-Za-z0-9_-]{64})$')
 lock = threading.RLock()
 network_scope = threading.local()
@@ -109,9 +110,9 @@ def canonical_video(value):
     value = validate_url(value)
     p = urlsplit(value)
     if VIDEO_PATH.fullmatch(p.path):
-        return 'https://www.tiktok.com' + p.path.rstrip('/')
+        return 'https://www.tiktok.com' + p.path.rstrip('/').replace('/photo/', '/video/')
     if p.hostname not in {'vm.tiktok.com', 'vt.tiktok.com'} and not re.fullmatch(r'/t/[A-Za-z0-9]+/?', p.path):
-        raise UserError('Hãy dán link video TikTok, không phải link hồ sơ hoặc ảnh.')
+        raise UserError('Hãy dán link video TikTok, không phải link hồ sơ.')
     # Không tự theo redirect: mỗi đích phải được kiểm tra trước khi truy cập.
     with httpx.Client(follow_redirects=False, timeout=15, trust_env=False) as client:
         for _ in range(6):
@@ -122,7 +123,7 @@ def canonical_video(value):
                     break
             p = urlsplit(value)
             if VIDEO_PATH.fullmatch(p.path):
-                return 'https://www.tiktok.com' + p.path.rstrip('/')
+                return 'https://www.tiktok.com' + p.path.rstrip('/').replace('/photo/', '/video/')
     raise UserError('Không giải được link rút gọn. Hãy mở link và sao chép địa chỉ video đầy đủ.')
 
 
@@ -277,10 +278,96 @@ def options(directory=None, audio=False, deadline=None):
     return opts
 
 
+class ClipnestTikTokIE(TikTokIE):
+    # Giữ nguyên xác thực/status của yt-dlp; bổ sung phần ảnh mà extractor bỏ qua.
+    @classmethod
+    def ie_key(cls):
+        return 'TikTok'
+
+    def _parse_aweme_video_web(self, aweme_detail, webpage_url, video_id, extract_flat=False):
+        result = super()._parse_aweme_video_web(aweme_detail, webpage_url, video_id, extract_flat)
+        result['clipnest_images'] = [image.get('imageURL', {}).get('urlList', [])
+                                    for image in (aweme_detail.get('imagePost') or {}).get('images', [])]
+        return result
+
+
+def validate_image_url(value):
+    # URL ảnh chỉ được lấy từ dữ liệu bài đăng; kiểm tra lại cả đích redirect.
+    p = urlsplit(value)
+    if (p.scheme != 'https' or not p.hostname or
+        not any(p.hostname == host or p.hostname.endswith('.' + host)
+                for host in ('tiktokcdn.com', 'tiktokcdn-us.com', 'tiktokcdn-eu.com')) or
+        p.port not in (None, 443) or p.username or p.password or
+        len(value) > 8192 or any(ord(c) < 32 for c in value) or '\\' in value):
+        raise UserError('Địa chỉ ảnh TikTok không hợp lệ.')
+    return value
+
+
+def image_extension(header):
+    if header.startswith(b'\xff\xd8\xff'): return 'jpg'
+    if header.startswith(b'\x89PNG\r\n\x1a\n'): return 'png'
+    if header[:4] == b'RIFF' and header[8:12] == b'WEBP': return 'webp'
+    if header[:6] in (b'GIF87a', b'GIF89a'): return 'gif'
+    if header[4:8] == b'ftyp' and header[8:12] in (b'avif', b'avis'): return 'avif'
+    raise UserError('TikTok không trả về file ảnh hợp lệ.')
+
+
+def download_images(data, directory, deadline):
+    images = data.get('clipnest_images') or []
+    if not images:
+        raise UserError('Không tìm thấy danh sách ảnh trong bài này.')
+    if len(images) > 100:
+        raise UserError('Bài vượt giới hạn 100 ảnh.')
+    with httpx.Client(timeout=20, follow_redirects=False, trust_env=False,
+                      headers={'Referer': 'https://www.tiktok.com/', 'User-Agent': 'Mozilla/5.0'}) as client:
+        for index, candidates in enumerate(images, 1):
+            if not candidates or not isinstance(candidates[0], str):
+                raise UserError(f'Ảnh {index} thiếu địa chỉ tải.')
+            url = validate_image_url(candidates[0])
+            for redirect in range(6):
+                if deadline and time.monotonic() > deadline:
+                    raise UserError('Tải ảnh quá thời gian cho phép.')
+                with client.stream('GET', url) as response:
+                    if response.is_redirect:
+                        url = validate_image_url(urljoin(url, response.headers.get('location', '')))
+                        continue
+                    response.raise_for_status()
+                    temp = directory / f'{index:03d}.part'
+                    size = 0
+                    with temp.open('wb') as output:
+                        for chunk in response.iter_bytes(65536):
+                            size += len(chunk)
+                            if size > 20 * 1024**2 or disk_bytes(directory) + len(chunk) > MAX_ZIP:
+                                raise UserError('Ảnh hoặc bộ ảnh vượt giới hạn dung lượng.')
+                            if disk_bytes(ROOT) + len(chunk) > MAX_STORAGE:
+                                raise UserError('Máy chủ đã đầy bộ nhớ tạm.')
+                            if deadline and time.monotonic() > deadline:
+                                raise UserError('Tải ảnh quá thời gian cho phép.')
+                            output.write(chunk)
+                    with temp.open('rb') as saved:
+                        extension = image_extension(saved.read(32))
+                    temp.rename(directory / f'{index:03d}.{extension}')
+                    break
+            else:
+                raise UserError('Ảnh chuyển hướng quá nhiều lần.')
+    return directory
+
+
+def add_to_zip(archive, files, prefix=''):
+    # Áp dụng cùng giới hạn khi tải riêng bộ ảnh và khi ghép vào ZIP tài khoản.
+    for file in files:
+        if archive.fp.tell() + file.stat().st_size + 65536 > MAX_ZIP:
+            raise UserError('Tổng dung lượng vượt giới hạn ZIP. Hãy giảm số lượng bài.')
+        if disk_bytes(ROOT) + file.stat().st_size + 65536 > MAX_STORAGE:
+            raise UserError('Máy chủ đã đầy bộ nhớ tạm.')
+        archive.write(file, arcname=prefix + file.name)
+
+
 @contextlib.contextmanager
 def downloader(opts):
     # Nạp cookies vào RAM; không ghi lại secret file dùng chung giữa các job.
     with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.add_info_extractor(ClipnestTikTokIE(ydl))
         cookie_path = os.getenv('COOKIES_FILE')
         if cookie_path:
             ydl.cookiejar.load(cookie_path, ignore_discard=True, ignore_expires=True)
@@ -291,9 +378,12 @@ def downloader(opts):
         yield ydl
 
 
-def download_one(url, directory, audio=False, deadline=None):
+def download_one(url, directory, audio=False, deadline=None, allow_images=False):
     with downloader(options(directory, audio, deadline)) as ydl:
-        result = ydl.extract_info(url, download=True)
+        data = ydl.extract_info(url, download=False, process=False)
+        if allow_images and data.get('clipnest_images'):
+            return download_images(data, directory, deadline)
+        result = ydl.process_ie_result(data, download=True)
     extension = 'mp3' if audio else 'mp4'
     files = list(directory.glob(f'*.{extension}'))
     if not result or not files:
@@ -331,7 +421,7 @@ def set_job(job, **values):
 def run_job(job):
     with slots, safe_network():
         try:
-            set_job(job, state='running', message='Đang lấy danh sách video…')
+            set_job(job, state='running', message='Đang lấy danh sách bài đăng…')
             deadline = time.monotonic() + TTL
             entries = profile_entries(job, deadline)
             if not entries:
@@ -342,15 +432,16 @@ def run_job(job):
                 for index, entry in enumerate(entries, 1):
                     if time.monotonic() > deadline:
                         raise UserError('Tác vụ quá 15 phút. Hãy giảm số lượng video.')
-                    set_job(job, current=index, message=f'Đang tải video {index}/{len(entries)}…')
+                    set_job(job, current=index, message=f'Đang tải bài {index}/{len(entries)}…')
                     folder = job.directory / str(index)
                     folder.mkdir()
                     try:
                         url = 'https://www.tiktok.com/@_/video/' + str(entry['id'])
-                        file = download_one(url, folder, deadline=deadline)
-                        if archive.stat().st_size + file.stat().st_size + 65536 > MAX_ZIP:
-                            raise UserError('Tổng dung lượng vượt giới hạn ZIP. Hãy giảm số lượng video.')
-                        zf.write(file, arcname=f'{index:03d}_{file.name}')
+                        file = download_one(url, folder, deadline=deadline, allow_images=True)
+                        if file.is_dir():
+                            add_to_zip(zf, sorted(file.iterdir()), prefix=f'{index:03d}_{entry["id"]}/')
+                        else:
+                            add_to_zip(zf, [file], prefix=f'{index:03d}_')
                         set_job(job, completed=job.completed + 1)
                     except Exception as exc:
                         if isinstance(exc, UserError) and any(x in str(exc) for x in ['dung lượng', 'thời gian', 'bộ nhớ']):
@@ -366,7 +457,7 @@ def run_job(job):
                     zf.writestr('LOI_TAI.txt', '\n'.join(f"Video {f['index']}: {f['message']}" for f in job.failures))
             if archive.stat().st_size > MAX_ZIP:
                 raise UserError('ZIP vượt giới hạn dung lượng cho phép.')
-            set_job(job, state='done', message=f'Đã tải {job.completed}/{job.total} video.', expires=time.time() + TTL)
+            set_job(job, state='done', message=f'Đã tải {job.completed}/{job.total} bài.', expires=time.time() + TTL)
         except Exception as exc:
             shutil.rmtree(job.directory, ignore_errors=True)
             set_job(job, state='error', message=friendly_error(exc), error_code=error_code(exc), expires=time.time() + TTL)
@@ -466,7 +557,7 @@ def foreground_slot():
 
 @app.get('/api/health')
 def health():
-    return {'status': 'ok', 'version': '0.2.1', 'max_zip_mb': MAX_ZIP // 1024**2}
+    return {'status': 'ok', 'version': '0.3.0', 'max_zip_mb': MAX_ZIP // 1024**2}
 
 @app.post('/api/video/info')
 def video_info(body: VideoInput):
@@ -480,8 +571,9 @@ def video_info(body: VideoInput):
             with downloader(info_options) as ydl:
                 data = ydl.extract_info(url, download=False)
             remember_profile(data)
-            return {'title': data.get('title'), 'author': data.get('uploader'), 'thumbnail': data.get('thumbnail'), 'duration': data.get('duration'), 'url': url,
+            return {'title': data.get('title'), 'author': data.get('uploader'), 'thumbnail': data.get('thumbnail'), 'duration': data.get('duration'), 'url': url, 'image_count': len(data.get('clipnest_images') or []),
                     'available_formats': {
+                        'images': bool(data.get('clipnest_images')),
                         'mp4': any(f.get('ext') == 'mp4' and f.get('vcodec') != 'none' and f.get('protocol') in {'http', 'https'} for f in data.get('formats', [])),
                         'mp3': any(f.get('acodec') != 'none' and f.get('protocol') in {'http', 'https'} for f in data.get('formats', [])),
                     }}
@@ -495,15 +587,26 @@ def remove_single(directory):
         single_dirs.pop(directory, None)
 
 @app.get('/api/video/download')
-def video_download(url: str, format: Literal['mp4', 'mp3'] = 'mp4'):
+def video_download(url: str, format: Literal['mp4', 'mp3', 'images'] = 'mp4'):
     validate_url(url)
     with foreground_slot():
         directory = Path(tempfile.mkdtemp(dir=ROOT))
         try:
-            file = download_one(canonical_video(url), directory, audio=format == 'mp3', deadline=time.monotonic() + TTL)
+            canonical = canonical_video(url)
+            deadline = time.monotonic() + TTL
+            if format == 'images':
+                with downloader(options()) as ydl:
+                    data = ydl.extract_info(canonical, download=False, process=False)
+                download_images(data, directory, deadline)
+                files = sorted(directory.iterdir())
+                file = directory / 'images.zip'
+                with zipfile.ZipFile(file, 'w', compression=zipfile.ZIP_STORED) as archive:
+                    add_to_zip(archive, files)
+            else:
+                file = download_one(canonical, directory, audio=format == 'mp3', deadline=deadline)
             with lock:
                 single_dirs[directory] = time.time() + TTL
-            return FileResponse(file, media_type='audio/mpeg' if format == 'mp3' else 'video/mp4', filename='clipnest-' + file.name, background=BackgroundTask(remove_single, directory))
+            return FileResponse(file, media_type={'mp3': 'audio/mpeg', 'mp4': 'video/mp4', 'images': 'application/zip'}[format], filename='clipnest-' + file.name, background=BackgroundTask(remove_single, directory))
         except Exception as exc:
             remove_single(directory)
             raise HTTPException(502, friendly_error(exc)) from None

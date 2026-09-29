@@ -66,3 +66,9 @@ Kết quả chỉ xác nhận tại thời điểm kiểm thử. TikTok vẫn c�
 - Render info bài thứ hai: HTTP 200, mp4=false/mp3=true; MP3 HTTP 200, 902445 bytes. Cả MP4 trong ZIP và MP3 tải từ Render đều giải mã bằng ffmpeg không lỗi.
 - GitHub Pages đã build commit frontend e31c7f0; kiểm tra browser thực tế thấy thông báo chỉ có âm thanh, nút MP4 disabled, MP3 enabled.
 - Kết quả chỉ xác nhận tại thời điểm kiểm thử; TikTok có thể thay đổi/chặn yêu cầu về sau. Không thể đảm bảo tải mọi bài.
+
+## Tải ảnh slideshow — 30/09/2026, bản 0.3.0
+
+- Local, bài paohan85/7690245358428933383: info báo 15 ảnh; ZIP ảnh HTTP 200, 7129364 bytes, 15 JPG đánh số 001–015, CRC hợp lệ, không MP3.
+- Local, paohan85 limit=2: thành công 2/2 bài, ZIP gồm một MP4 và thư mục 15 ảnh của slideshow, không có LOI_TAI.txt. Giải mã MP4 và toàn bộ 15 ảnh bằng ffmpeg thành công.
+- 58 kiểm thử đạt: bổ sung thứ tự/nội dung ảnh, URL photo, domain/redirect ảnh chống SSRF, giới hạn dung lượng, từ chối HTML giả ảnh, dọn file tải riêng và ZIP kết hợp video/ảnh.

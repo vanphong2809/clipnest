@@ -212,3 +212,72 @@ def test_direct_format_selection(audio, formats, expected):
         else:
             result = ydl.process_ie_result(data, download=False)
             assert result['format_id'] == expected
+
+@pytest.mark.parametrize('url', ['https://127.0.0.1/a.jpg', 'https://tiktokcdn.com.evil.com/a.jpg',
+    'https://tiktokcdn.com@localhost/a.jpg', 'http://p16.tiktokcdn.com/a.jpg', 'https://p16.tiktokcdn.com:8080/a.jpg'])
+def test_image_url_guard(url):
+    with pytest.raises(main.UserError): main.validate_image_url(url)
+
+
+def test_photo_url_normalizes():
+    assert main.canonical_video('https://www.tiktok.com/@abc/photo/123') == 'https://www.tiktok.com/@abc/video/123'
+
+
+def mock_image_client(monkeypatch, handler):
+    original = main.httpx.Client
+    monkeypatch.setattr(main.httpx, 'Client', lambda **kwargs: original(transport=main.httpx.MockTransport(handler), **kwargs))
+
+
+def test_images_order_original_bytes_and_no_audio(monkeypatch, tmp_path):
+    payloads = [b'\xff\xd8\xfffirst', b'\x89PNG\r\n\x1a\nsecond']
+    mock_image_client(monkeypatch, lambda req: main.httpx.Response(200, content=payloads[int(req.url.path[1:])]))
+    data = {'clipnest_images': [['https://p16.tiktokcdn.com/0'], ['https://p16.tiktokcdn.com/1']]}
+    main.download_images(data, tmp_path, time.monotonic()+10)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['001.jpg', '002.png']
+    assert (tmp_path/'001.jpg').read_bytes() == payloads[0]
+    assert (tmp_path/'002.png').read_bytes() == payloads[1]
+
+
+def test_image_redirect_blocked_before_request(monkeypatch,tmp_path):
+    calls=[]
+    def handler(req):
+        calls.append(str(req.url))
+        return main.httpx.Response(302,headers={'location':'https://127.0.0.1/secret'})
+    mock_image_client(monkeypatch,handler)
+    with pytest.raises(main.UserError):
+        main.download_images({'clipnest_images':[['https://p16.tiktokcdn.com/a']]},tmp_path,time.monotonic()+10)
+    assert len(calls)==1
+
+
+def test_images_limit_and_invalid_payload(monkeypatch,tmp_path):
+    mock_image_client(monkeypatch,lambda req:main.httpx.Response(200,content=b'<html>blocked</html>'))
+    data={'clipnest_images':[['https://p16.tiktokcdn.com/a']]}
+    with pytest.raises(main.UserError,match='file ảnh hợp lệ'):main.download_images(data,tmp_path,time.monotonic()+10)
+    monkeypatch.setattr(main,'MAX_ZIP',3)
+    with pytest.raises(main.UserError,match='dung lượng'):main.download_images(data,tmp_path,time.monotonic()+10)
+
+
+def test_single_image_zip_cleanup(monkeypatch):
+    class Fake:
+        def extract_info(self,*args,**kwargs):return {'clipnest_images':[['https://p16.tiktokcdn.com/a']]}
+    monkeypatch.setattr(main,'downloader',lambda opts:contextlib.nullcontext(Fake()))
+    mock_image_client(monkeypatch,lambda req:main.httpx.Response(200,content=b'\xff\xd8\xffimage'))
+    response=client.get('/api/video/download',params={'url':'https://www.tiktok.com/@a/photo/123','format':'images'})
+    assert response.status_code==200
+    assert response.headers['content-type']=='application/zip'
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:assert archive.namelist()==['001.jpg']
+    assert main.single_dirs=={}
+
+
+def test_bulk_mixed_video_gallery(monkeypatch,tmp_path):
+    monkeypatch.setattr(main,'downloader',fake_downloader)
+    def download(url,folder,**kwargs):
+        if url.endswith('/1'):
+            file=folder/'1.mp4';file.write_bytes(b'movie');return file
+        for name in ['001.jpg','002.jpg']:(folder/name).write_bytes(b'image')
+        return folder
+    monkeypatch.setattr(main,'download_one',download)
+    job=main.Job('mixed','abc',2,tmp_path);main.run_job(job)
+    assert (job.state,job.completed,job.processed)==('done',2,2)
+    with zipfile.ZipFile(tmp_path/'videos.zip') as archive:
+        assert archive.namelist()==['001_1.mp4','002_2/001.jpg','002_2/002.jpg']

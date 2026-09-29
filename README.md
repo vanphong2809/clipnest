@@ -14,8 +14,9 @@ Website tải video TikTok bằng FastAPI + yt-dlp, giao diện HTML/CSS/JavaScr
 
 - Dán link video đầy đủ, `vm.tiktok.com`, `vt.tiktok.com` hoặc `www.tiktok.com/t/…`; xem tiêu đề, tác giả, ảnh thu nhỏ, thời lượng.
 - Tải MP4 hoặc tách MP3 bằng ffmpeg. Không cam kết loại bỏ watermark.
-- Tải theo `abc`, `@abc`, URL hồ sơ, userId dạng số hoặc secUid; mặc định 20, từ 1 đến 100 video. Tải tuần tự trong mỗi job, theo thứ tự TikTok cung cấp.
-- Tiến trình số video đã xử lý/thành công, lưu job trong sessionStorage để có thể tải lại trang. Video lỗi được ghi trong `LOI_TAI.txt` bên trong ZIP. Nếu tất cả video lỗi, job báo lỗi.
+- Slideshow: hỗ trợ cả URL `/photo/` và `/video/`, tải danh sách ảnh thành ZIP, giữ thứ tự `001.jpg`, `002.jpg`… và không kèm nhạc. Giữ nguyên file do CDN cung cấp, không chuyển đổi/nén lại; không cam kết là file gốc trước khi tác giả tải lên TikTok.
+- Tải theo `abc`, `@abc`, URL hồ sơ, userId dạng số hoặc secUid; mặc định 20, từ 1 đến 100 bài. Video lưu thành MP4, slideshow lưu trong thư mục `<số thứ tự>_<post_id>/` riêng trong ZIP. Tải tuần tự trong mỗi job, theo thứ tự TikTok cung cấp.
+- Tiến trình số bài đã xử lý/thành công, lưu job trong sessionStorage để có thể tải lại trang. Video lỗi được ghi trong `LOI_TAI.txt` bên trong ZIP. Nếu tất cả video lỗi, job báo lỗi.
 - Giao diện tiếng Việt, responsive, điều hướng bàn phím và thông báo trạng thái.
 
 ## Cấu trúc
@@ -229,8 +230,15 @@ Nếu báo không lấy được mã định danh tài khoản:
 
 Cách này chỉ hỗ trợ bước nhận diện tài khoản; nếu TikTok chặn cả API danh sách thì vẫn có thể thất bại. Cookies có thể hữu ích với phiên đăng nhập hợp lệ nhưng không đảm bảo; không gửi cookies trong chat hay commit Git. Stable yt-dlp 2026.08.19 vẫn là bản stable mới nhất được kiểm tra ngày 29/09/2026. Vấn đề lấy danh sách có báo cáo ở [yt-dlp #17500](https://github.com/yt-dlp/yt-dlp/issues/17500).
 
-### Bài chỉ có âm thanh hoặc thiếu MP4
+### Slideshow và bài thiếu MP4
 
-API thông tin vẫn trả metadata và `available_formats` khi không có MP4. Giao diện chỉ bật nút có định dạng phù hợp. MP3 có thể tải trực tiếp từ luồng âm thanh; MP4 chấp nhận cả video không có tiếng. Chỉ dùng HTTP/HTTPS trực tiếp, không chuyển URL manifest cho ffmpeg.
+API thông tin vẫn trả metadata và `available_formats` khi không có MP4. Giao diện chỉ bật nút có định dạng phù hợp; bài có ảnh hiển thị nút tải ZIP ảnh và ẩn nút MP3. MP3 có thể tải trực tiếp từ luồng âm thanh; MP4 chấp nhận cả video không có tiếng. Chỉ dùng HTTP/HTTPS trực tiếp, không chuyển URL manifest cho ffmpeg.
 
-Bài `7690245358428933383` của tài khoản mẫu `paohan85` hiện chỉ được yt-dlp trả một luồng MP3. Không thể coi lỗi “Requested format is not available” là tài khoản bị xoá hay chặn IP. Bài thiếu MP4 sẽ được ghi vào `LOI_TAI.txt` trong ZIP; ứng dụng không tự dựng video từ ảnh.
+Bài `7690245358428933383` của tài khoản mẫu `paohan85` hiện chỉ được yt-dlp trả một luồng MP3. Không thể coi lỗi “Requested format is not available” là tài khoản bị xoá hay chặn IP. Từ bản 0.3.0, backend lấy `imagePost.images` từ dữ liệu TikTok mà yt-dlp đã xác thực, rồi tải từng ảnh theo thứ tự. Với slideshow, ZIP tài khoản chứa thư mục ảnh thay vì báo thiếu MP4; ứng dụng không tự dựng video từ ảnh.
+
+
+### API bộ ảnh
+
+`POST /api/video/info` trả thêm `image_count` và `available_formats.images`. Gọi `GET /api/video/download?url=...&format=images` để tải ZIP ảnh. Không trả danh sách URL CDN ký số cho frontend. Chế độ tài khoản tự nhận diện bài ảnh, không tải nhạc đi kèm; giới hạn số lượng tính theo bài đăng.
+
+Giới hạn: tối đa 100 ảnh/bài, 20 MiB/ảnh, cùng giới hạn tổng ZIP/bộ nhớ/thời gian/rate limit. Kiểm tra domain CDN ở từng redirect, IP socket và chữ ký file ảnh; lỗi tải một ảnh khiến bài đó được báo lỗi thay vì âm thầm giao thiếu ảnh. Ảnh có thể là JPG/PNG/WebP/GIF/AVIF tùy dữ liệu nguồn. Phần mở rộng extractor dùng phương thức nội bộ `_parse_aweme_video_web`: kiểm thử lại khi nâng yt-dlp.
