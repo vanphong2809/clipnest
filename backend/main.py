@@ -515,7 +515,8 @@ def client_ip(request):
 async def rate_limit(request: Request, call_next):
     if request.url.path != '/api/health' and request.method != 'OPTIONS':
         ip = client_ip(request)
-        expensive = request.url.path in {'/api/video/info', '/api/video/download', '/api/user/start'}
+        # [DOUYIN]
+        expensive = request.url.path in {'/api/video/info', '/api/video/download', '/api/user/start', '/api/douyin/video/info', '/api/douyin/video/download', '/api/douyin/user/start'}
         limit = int(os.getenv('RATE_LIMIT_PER_MINUTE', '8')) if expensive else 90
         key = (ip, expensive)
         now = time.time()
@@ -653,3 +654,11 @@ def job_zip(job_id: str):
             raise HTTPException(409, 'File ZIP chưa sẵn sàng.')
         job.readers += 1
         return FileResponse(job.directory / 'videos.zip', media_type='application/zip', filename=f'clipnest-{job.username}.zip', background=BackgroundTask(release_zip, job))
+
+# [DOUYIN]
+import douyin
+app.include_router(douyin.router)
+
+# [YOUTUBE]
+import youtube
+app.include_router(youtube.router)
