@@ -60,7 +60,12 @@ $('video-form').onsubmit = async event => {
   event.preventDefault(); $('info-button').disabled = true; $('video-result').hidden = true; selectedVideo = null;
   message('video-message', 'Đang lấy thông tin bài đăng… Lần đầu có thể lâu hơn khi máy chủ đang khởi động.');
   try {
-    const response = await request('/api/video/info', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: $('video-url').value.trim()}) });
+    // [DOUYIN]
+    const platform = document.querySelector('input[name="platform"]:checked')?.value || 'tiktok';
+    const apiPath = platform === 'douyin' ? '/api/douyin/video/info' : '/api/video/info';
+    window.currentPlatform = platform;
+    
+    const response = await request(apiPath, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: $('video-url').value.trim()}) });
     const data = await response.json(); selectedVideo = data.url;
     availableFormats = data.available_formats || {mp4: true, mp3: true};
     updateDownloadButtons();
@@ -82,7 +87,11 @@ for (const [button, format] of [['download-video', 'mp4'], ['download-audio', 'm
     updateDownloadButtons(true);
     message('video-message', `Đang chuẩn bị file ${format === 'images' ? 'ZIP ảnh' : format.toUpperCase()}… Vui lòng giữ trang này mở.`);
     try {
-      await saveFile(`/api/video/download?url=${encodeURIComponent(url)}&format=${format}`, `clipnest.${format === 'images' ? 'zip' : format}`);
+      // [DOUYIN]
+      const platform = window.currentPlatform || 'tiktok';
+      const downloadPath = platform === 'douyin' ? '/api/douyin/video/download' : '/api/video/download';
+      
+      await saveFile(`${downloadPath}?url=${encodeURIComponent(url)}&format=${format}`, `clipnest.${format === 'images' ? 'zip' : format}`);
       message('video-message', 'File đã sẵn sàng. Kiểm tra mục tải xuống của trình duyệt.');
     } catch (error) { message('video-message', errorText(error), true); }
     finally { updateDownloadButtons(); }
@@ -123,7 +132,11 @@ $('user-form').onsubmit = async event => {
   event.preventDefault(); $('start-button').disabled = true; $('download-zip').hidden = true; $('job-progress').hidden = true;
   message('user-message', 'Đang tạo tác vụ tải…');
   try {
-    const data = await (await request('/api/user/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: $('username').value.trim(), limit: Number($('limit').value)})})).json();
+    // [DOUYIN]
+    const platform = document.querySelector('input[name="platform"]:checked')?.value || 'tiktok';
+    const apiPath = platform === 'douyin' ? '/api/douyin/user/start' : '/api/user/start';
+    
+    const data = await (await request(apiPath, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: $('username').value.trim(), limit: Number($('limit').value)})})).json();
     activeJob = data.job_id; rememberJob(activeJob); await pollJob();
   } catch (error) { message('user-message', errorText(error), true); $('start-button').disabled = false; }
 };
