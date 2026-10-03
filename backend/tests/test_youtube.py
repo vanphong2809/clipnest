@@ -32,6 +32,15 @@ def test_validate_youtube_url(url, expected_status):
     if expected_status == 400:
         response = client.post('/api/youtube/video/info', json={'url': url})
         assert response.status_code == 400
+    else:
+        assert youtube.canonical_youtube_video(url).startswith('https://')
+
+
+def test_downloader_enables_node_runtime(monkeypatch):
+    monkeypatch.setattr(youtube, 'JS_RUNTIME_NAME', 'node')
+    monkeypatch.setattr(youtube, 'YOUTUBE_COOKIES_FILE', None)
+    with youtube.get_youtube_downloader(youtube.youtube_options()) as downloader:
+        assert 'node' in downloader.params['js_runtimes']
 
 def test_youtube_video_info_mocked(monkeypatch):
     url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
@@ -63,6 +72,30 @@ def test_youtube_video_info_mocked(monkeypatch):
     assert '720p' in data['available_formats']
     assert 'mp3' in data['available_formats']
 
+
+def test_youtube_info_does_not_hide_extraction_failures(monkeypatch):
+    def downloader(opts):
+        assert not opts.get('ignore_no_formats_error')
+        raise Exception("Sign in to confirm you're not a bot")
+
+    monkeypatch.setattr(youtube, 'get_youtube_downloader', downloader)
+    response = client.post('/api/youtube/video/info', json={'url': 'https://youtu.be/BaW_jenozKc'})
+    assert response.status_code == 502
+    assert 'bot' in response.json()['detail']
+
+
+def test_youtube_info_without_formats_is_an_error(monkeypatch):
+    class MockDownloader:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def extract_info(self, url, download=False):
+            return {'id': 'BaW_jenozKc', 'formats': []}
+
+    monkeypatch.setattr(youtube, 'get_youtube_downloader', lambda opts: MockDownloader())
+    response = client.post('/api/youtube/video/info', json={'url': 'https://youtu.be/BaW_jenozKc'})
+    assert response.status_code == 502
+    assert 'định dạng tải' in response.json()['detail']
+
 def test_youtube_video_info_private(monkeypatch):
     url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
     
@@ -77,4 +110,3 @@ def test_youtube_video_info_private(monkeypatch):
     response = client.post('/api/youtube/video/info', json={'url': url})
     assert response.status_code == 502
     assert 'riêng tư' in response.json()['detail'].lower()
-

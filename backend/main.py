@@ -662,3 +662,7 @@ app.include_router(douyin.router)
 # [YOUTUBE]
 import youtube
 app.include_router(youtube.router)
+
+# [INSTAGRAM]
+import instagram
+app.include_router(instagram.router)

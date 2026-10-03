@@ -8,7 +8,9 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232435e8'/%3E%3Cpath d='M16 7v13m-5-5 5 5 5-5M8 23v3h16v-3' fill='none' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css"><script src="config.js" defer></script><script src="app.js?v=0.3.0" defer></script>
   <!-- [YOUTUBE] -->
-  <script src="youtube.js" defer></script></head>
+  <script src="youtube.js?v=20261004" defer></script>
+  <!-- [INSTAGRAM] -->
+  <script src="instagram.js?v=20261004" defer></script></head>
 <body>
   <header class="topbar"><a class="brand" href="./" aria-label="Clipnest trang chủ"><span class="brand-mark">↓</span>clipnest<span class="brand-period">.</span></a><span class="header-note">Video của bạn. Luôn bên bạn.</span></header>
   <main>
@@ -20,6 +22,8 @@
         <label style="font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;"><input type="radio" name="platform" value="douyin"> Douyin</label>
         <!-- [YOUTUBE] -->
         <label style="font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;"><input type="radio" name="platform" value="youtube"> YouTube</label>
+        <!-- [INSTAGRAM] -->
+        <label style="font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;"><input type="radio" name="platform" value="instagram"> Instagram</label>
       </div>
       <div id="td-workspace">
       <div class="tabs" role="tablist" aria-label="Chế độ tải">
@@ -45,7 +49,7 @@
           <button id="yt-tab-video" class="tab active" role="tab" aria-selected="true" aria-controls="yt-panel-video">01 <span>Dán link</span></button>
           <button id="yt-tab-playlist" class="tab" role="tab" aria-selected="false" aria-controls="yt-panel-playlist" tabindex="-1">02 <span>Playlist / Kênh</span></button>
         </div>
-        
+
         <div id="yt-panel-video" class="panel" role="tabpanel" aria-labelledby="yt-tab-video">
           <form id="yt-video-form">
             <label for="yt-video-url">Link video YouTube</label>
@@ -61,13 +65,13 @@
               <span class="mini-label">NỘI DUNG CỦA BẠN</span>
               <h2 id="yt-video-title"></h2>
               <p id="yt-video-meta"></p>
-              
+
               <div style="margin-bottom: 15px;">
                  <label for="yt-quality-select" style="font-size: 13px; margin-bottom: 5px;">Chất lượng:</label>
                  <select id="yt-quality-select" class="yt-select">
                  </select>
               </div>
-              
+
               <div class="download-actions">
                 <button id="yt-download-button" class="primary">Tải xuống <span aria-hidden="true">↓</span></button>
               </div>
@@ -108,6 +112,75 @@
             <progress id="yt-progress" value="0" max="1">0%</progress>
             <p id="yt-job-detail" class="hint"></p>
             <button id="yt-download-zip" class="primary" hidden>Tải file ZIP <span aria-hidden="true">↓</span></button>
+          </section>
+        </div>
+      </div>
+      <!-- [INSTAGRAM] -->
+      <div id="ig-workspace" style="display: none;">
+        <div class="tabs ig-tabs" role="tablist" aria-label="Chế độ tải Instagram">
+          <button id="ig-tab-video" class="tab active" role="tab" aria-selected="true" aria-controls="ig-panel-video">01 <span>Dán link</span></button>
+          <button id="ig-tab-playlist" class="tab" role="tab" aria-selected="false" aria-controls="ig-panel-playlist" tabindex="-1">02 <span>Cá nhân / Kênh</span></button>
+        </div>
+
+        <div id="ig-panel-video" class="panel" role="tabpanel" aria-labelledby="ig-tab-video">
+          <form id="ig-video-form">
+            <label for="ig-video-url">Link bài viết (Post/Reel) Instagram</label>
+            <div class="input-row">
+              <input id="ig-video-url" type="text" placeholder="Dán link Instagram vào đây…" required maxlength="2048" autocomplete="off">
+              <button class="primary" id="ig-info-button" type="submit">Lấy thông tin <span aria-hidden="true">↗</span></button>
+            </div>
+          </form>
+          <div id="ig-video-message" class="message" role="status" aria-live="polite" hidden></div>
+          <article id="ig-video-result" class="result" hidden>
+            <img id="ig-thumbnail" alt="Ảnh thu nhỏ của bài viết" referrerpolicy="no-referrer">
+            <div class="result-content">
+              <span class="mini-label">NỘI DUNG CỦA BẠN</span>
+              <h2 id="ig-video-title"></h2>
+              <p id="ig-video-meta"></p>
+
+              <div style="margin-bottom: 15px;">
+                 <label for="ig-quality-select" style="font-size: 13px; margin-bottom: 5px;">Định dạng:</label>
+                 <select id="ig-quality-select" class="yt-select">
+                 </select>
+              </div>
+
+              <div class="download-actions">
+                <button id="ig-download-button" class="primary">Tải xuống <span aria-hidden="true">↓</span></button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div id="ig-panel-playlist" class="panel" role="tabpanel" aria-labelledby="ig-tab-playlist" hidden>
+          <form id="ig-playlist-form">
+            <div class="user-fields">
+              <div>
+                <label for="ig-playlist-url">Link Cá nhân hoặc Kênh IG</label>
+                <input id="ig-playlist-url" type="text" placeholder="https://www.instagram.com/tentaikhoan..." required maxlength="2048" autocomplete="off">
+              </div>
+              <div>
+                <label for="ig-limit">Số bài tối đa</label>
+                <input id="ig-limit" type="number" min="1" max="30" step="1" value="5" required>
+              </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <label for="ig-batch-quality" style="font-size: 13px; margin-bottom: 5px;">Định dạng chung:</label>
+                <select id="ig-batch-quality" class="yt-select">
+                  <option value="mp4" selected>Video/Ảnh (MP4/JPG)</option>
+                  <option value="mp3">Âm thanh (MP3)</option>
+                </select>
+            </div>
+            <button id="ig-start-button" class="primary" style="margin-top: 23px;" type="submit">Tải hàng loạt <span aria-hidden="true">↓</span></button>
+          </form>
+          <div id="ig-playlist-message" class="message" role="status" aria-live="polite" hidden></div>
+          <section id="ig-job-progress" class="job-card" hidden aria-label="Tiến trình tải">
+            <div class="job-heading">
+              <strong id="ig-job-label">Đang chờ lượt…</strong>
+              <span id="ig-job-count">0 / 0</span>
+            </div>
+            <progress id="ig-progress" value="0" max="1">0%</progress>
+            <p id="ig-job-detail" class="hint"></p>
+            <button id="ig-download-zip" class="primary" hidden>Tải file ZIP <span aria-hidden="true">↓</span></button>
           </section>
         </div>
       </div>

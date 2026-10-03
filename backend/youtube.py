@@ -31,11 +31,15 @@ YOUTUBE_COOKIES_FILE = os.getenv('YOUTUBE_COOKIES_FILE')
 
 YOUTUBE_HOSTS = {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'}
 
-# Check dependencies
+# Check dependencies. yt-dlp requires an explicitly enabled JS runtime for
+# YouTube challenge solving. Node 22+ is installed in the Render image.
+JS_RUNTIME_NAME = None
 JS_RUNTIME_AVAILABLE = False
-for cmd in ['node', 'deno', 'bun']:
+for cmd in ['node', 'deno', 'quickjs', 'bun']:
     try:
-        if subprocess.run([cmd, '--version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        result = subprocess.run([cmd, '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            JS_RUNTIME_NAME = cmd
             JS_RUNTIME_AVAILABLE = True
             break
     except FileNotFoundError:
@@ -85,20 +89,10 @@ def validate_youtube_url(value: str) -> str:
     return value
 
 def canonical_youtube_video(value: str) -> str:
-    value = validate_youtube_url(value)
-    # Resolve shortlinks like youtu.be safely
-    with httpx.Client(follow_redirects=False, timeout=15, trust_env=False) as client:
-        for _ in range(6):
-            with client.stream('HEAD', value, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}) as response:
-                if response.is_redirect and response.headers.get('location'):
-                    new_url = urljoin(value, response.headers['location'])
-                    p = urlsplit(new_url)
-                    if not is_valid_youtube_host(p.hostname):
-                        raise main.UserError('Link chuyển hướng đến trang không hợp lệ (SSRF bảo vệ).')
-                    value = new_url
-                else:
-                    break
-    return value
+    # yt-dlp understands youtu.be/Shorts/Music URLs itself. Avoid a separate
+    # HEAD request here because cloud providers can receive different blocking
+    # responses from YouTube than the extractor request that follows.
+    return validate_youtube_url(value)
 
 def friendly_youtube_error(error):
     msg = str(error).lower()
@@ -144,6 +138,8 @@ def youtube_options(directory=None, format_str=None, deadline=None):
         'restrictfilenames': True, 'overwrites': False,
         'merge_output_format': 'mp4',
     }
+    if JS_RUNTIME_NAME:
+        opts['js_runtimes'] = {JS_RUNTIME_NAME: {}}
     if format_str:
         opts['format'] = format_str
     
@@ -175,7 +171,6 @@ def video_info(body: YouTubeVideoInput):
             # Drop playlist param if it's a single video request
             opts = youtube_options(format_str=None)
             opts['noplaylist'] = True
-            opts['ignore_no_formats_error'] = True
             
             with get_youtube_downloader(opts) as ydl:
                 data = ydl.extract_info(url, download=False)
@@ -210,6 +205,9 @@ def video_info(body: YouTubeVideoInput):
             qualities = [f"{q}p" for q in available_qualities]
             if has_mp3:
                 qualities.append("mp3")
+
+            if not qualities:
+                raise main.UserError('YouTube không cung cấp định dạng tải phù hợp cho video này. Máy chủ có thể đang bị YouTube hạn chế truy cập.')
                 
             return {
                 'title': data.get('title'),

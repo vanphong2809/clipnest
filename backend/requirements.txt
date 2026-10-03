@@ -1,5 +1,5 @@
 fastapi==0.141.1
 uvicorn==0.54.0
-yt-dlp==2026.8.19
+yt-dlp[default]==2026.8.19
 httpx==0.28.1
 python-dotenv==1.2.2

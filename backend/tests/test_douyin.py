@@ -35,10 +35,11 @@ def test_douyin_video_info_mocked(monkeypatch):
             }
             
     monkeypatch.setattr('douyin.get_douyin_downloader', lambda opts: MockDownloader())
+    # Metadata unit test: URL redirect resolution is a separate network step.
+    monkeypatch.setattr(douyin, 'canonical_douyin_video', douyin.validate_douyin_url)
     
     response = client.post('/api/douyin/video/info', json={'url': url})
     assert response.status_code == 200
     data = response.json()
     assert data['title'] == 'Test Douyin Video'
     assert data['author'] == 'Test User'
-

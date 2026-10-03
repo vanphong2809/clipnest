@@ -17,6 +17,7 @@ Website tải video TikTok bằng FastAPI + yt-dlp, giao diện HTML/CSS/JavaScr
 - Slideshow: hỗ trợ cả URL `/photo/` và `/video/`, tải danh sách ảnh thành ZIP, giữ thứ tự `001.jpg`, `002.jpg`… và không kèm nhạc. Giữ nguyên file do CDN cung cấp, không chuyển đổi/nén lại; không cam kết là file gốc trước khi tác giả tải lên TikTok.
 - Tải theo `abc`, `@abc`, URL hồ sơ, userId dạng số hoặc secUid; mặc định 20, từ 1 đến 100 bài. Video lưu thành MP4, slideshow lưu trong thư mục `<số thứ tự>_<post_id>/` riêng trong ZIP. Tải tuần tự trong mỗi job, theo thứ tự TikTok cung cấp.
 - Tải video YouTube: Hỗ trợ link thường, link rút gọn `youtu.be`, Shorts, Music. Cho phép tải MP4 các chất lượng (1080p, 720p, 480p, 360p) hoặc MP3. Hỗ trợ tải hàng loạt từ Playlist/Kênh.
+- Tải video Instagram: Hỗ trợ Reels, Posts (Video/Ảnh), IGTV. **Yêu cầu phải cấu hình file cookies riêng biệt nếu không sẽ bị Instagram chặn hoàn toàn**. Hỗ trợ tải hàng loạt cá nhân/kênh (nguy cơ bị ban cookies cao).
 - Tiến trình số bài đã xử lý/thành công, lưu job trong sessionStorage để có thể tải lại trang. Video lỗi được ghi trong `LOI_TAI.txt` bên trong ZIP. Nếu tất cả video lỗi, job báo lỗi.
 - Giao diện tiếng Việt, responsive, điều hướng bàn phím và thông báo trạng thái.
 
@@ -119,6 +120,12 @@ FileResponse gửi file theo khối, không đọc cả MP4/ZIP vào RAM backend
 | `YOUTUBE_MAX_FILESIZE_MB` | 500 | Kích thước tối đa cho mỗi video YouTube tải về (MiB) |
 | `YOUTUBE_MAX_ZIP_MB` | 2048 | Kích thước tối đa cho file ZIP tải YouTube hàng loạt (MiB) |
 | `YOUTUBE_MAX_CONCURRENT_JOBS` | 1 | Số lượng tiến trình xử lý YouTube hàng loạt đồng thời |
+| `INSTAGRAM_ENABLED` | true | Bật/tắt tính năng Instagram |
+| `INSTAGRAM_COOKIES_FILE` | trống | Đường dẫn tới file cookies Netscape riêng cho Instagram |
+| `INSTAGRAM_MAX_DURATION_SEC` | 3600 | Thời lượng tối đa cho phép tải của 1 video Instagram (giây) |
+| `INSTAGRAM_MAX_FILESIZE_MB` | 500 | Kích thước tối đa cho mỗi video Instagram tải về (MiB) |
+| `INSTAGRAM_MAX_ZIP_MB` | 2048 | Kích thước tối đa cho file ZIP tải Instagram hàng loạt (MiB) |
+| `INSTAGRAM_MAX_CONCURRENT_JOBS` | 1 | Số lượng tiến trình xử lý Instagram hàng loạt đồng thời |
 
 Chỉ chạy **một Uvicorn worker và một instance**: job, giới hạn tốc độ và semaphore nằm trong RAM. Khởi động lại làm mất job. Muốn nhiều instance cần Redis/hàng đợi và lưu trữ dùng chung.
 
@@ -128,10 +135,16 @@ Bảo vệ SSRF: input chỉ nhận HTTPS, host TikTok chính xác; không useri
 
 Timeout kết nối 20 giây, retry có giới hạn và kiểm tra deadline giữa các video/callback. Deadline là giới hạn hợp tác; một thao tác thư viện/ffmpeg đang chạy không bị kill cưỡng chế ngay tại mốc 900 giây.
 
-## Cookies (Đặc biệt cho YouTube)
+## Cookies (Đặc biệt cho YouTube & Instagram)
 
-Chỉ dùng cookies của tài khoản bạn được phép sử dụng, ở định dạng Netscape. Đặt `COOKIES_FILE=/đường/dẫn/cookies.txt` cho TikTok/Douyin, và `YOUTUBE_COOKIES_FILE=/đường/dẫn/youtube_cookies.txt` cho YouTube. Cookies được nạp riêng vào RAM mỗi downloader.
-**Lưu ý an toàn với YouTube:** Hãy dùng một tài khoản Google phụ (không phải tài khoản chính) để xuất cookies, nhằm tránh nguy cơ bị khoá tài khoản chính nếu YouTube phát hiện hoạt động tự động. 
+Chỉ dùng cookies của tài khoản bạn được phép sử dụng, ở định dạng Netscape.
+- Đặt `COOKIES_FILE=/đường/dẫn/cookies.txt` cho TikTok/Douyin
+- `YOUTUBE_COOKIES_FILE=/đường/dẫn/youtube_cookies.txt` cho YouTube
+- `INSTAGRAM_COOKIES_FILE=/đường/dẫn/instagram_cookies.txt` cho Instagram.
+
+**Lưu ý an toàn với YouTube và Instagram:**
+- **BẮT BUỘC** dùng một tài khoản phụ (không phải tài khoản chính) để xuất cookies cho Instagram và YouTube, nhằm tránh nguy cơ bị khoá/ban tài khoản chính nếu nền tảng phát hiện hoạt động tự động.
+- Đặc biệt với **Instagram**, việc tải hàng loạt sẽ kích hoạt các cơ chế phát hiện bot và khoá cookies cực kỳ nhanh chóng. Rất khó để chạy dịch vụ tải Instagram số lượng lớn mà không bị cấm. Hãy chuẩn bị tinh thần bị ban tài khoản phụ.
 
 Trên Render, vào service → Environment → Secret Files, thêm file cookies, khai báo biến môi trường tương ứng rồi deploy lại. Không dán cookies vào frontend, GitHub, logs hoặc issue.
 
@@ -218,8 +231,9 @@ Thử lại MP4, MP3, link rút gọn và user limit=2 bằng nội dung bạn c
 
 ## Hạn chế vận hành
 
-- YouTube/TikTok có thể yêu cầu đăng nhập, giới hạn vùng, trả danh sách thiếu hoặc chặn IP cloud (đặc biệt là YouTube). Cookies/yt-dlp mới chỉ có thể cải thiện, không đảm bảo tải được mọi lúc. Job trống và lỗi được hiển thị rõ.
-- Dung lượng RAM và Disk của môi trường hosting (đặc biệt Render Free) có giới hạn, cẩn thận khi tải playlist YouTube quá dài hoặc chất lượng 1080p, có thể làm sập server do hết bộ nhớ tạm.
+- **Instagram/YouTube/TikTok** có thể yêu cầu đăng nhập, giới hạn vùng, trả danh sách thiếu hoặc chặn IP cloud. Cookies/yt-dlp mới chỉ có thể cải thiện, không đảm bảo tải được mọi lúc. Job trống và lỗi được hiển thị rõ.
+- Riêng đối với **Instagram**, hệ thống chống bot hoạt động cực kỳ khắc nghiệt. Bạn gần như không thể tải bài viết nếu không có Cookies truyền vào, và nếu tải batch nhiều, cookies (tài khoản) đó rất dễ bị cấm/xoá.
+- Dung lượng RAM và Disk của môi trường hosting (đặc biệt Render Free) có giới hạn, cẩn thận khi tải playlist YouTube/Instagram quá dài hoặc chất lượng cao, có thể làm sập server do hết bộ nhớ tạm.
 - Render Free ngủ sau 15 phút không có traffic; khởi động lại khoảng một phút, file và job tạm có thể mất. Không phù hợp cho dịch vụ production đông người. Xem [giới hạn Free chính thức](https://render.com/docs/free).
 - Render có quota băng thông/build và có thể đình chỉ dịch vụ Free phát sinh lượng traffic ra ngoài cao. Nếu tài khoản đã gắn phương thức thanh toán, có thể có phí vượt quota; hãy kiểm tra spend limit trong dashboard. Dự án không tự nâng gói hay mua dịch vụ.
 - Không có tài khoản ứng dụng; job_id ngẫu nhiên đóng vai trò link khó đoán. Không chia sẻ job_id nếu không muốn người khác tải ZIP trong thời gian còn hiệu lực.
