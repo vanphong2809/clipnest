@@ -45,7 +45,9 @@ tiktok-downloader/
 
 ## Chạy local
 
-Cần Python 3.11 trở lên, ffmpeg, và Node.js (hoặc Deno/Bun) để làm JS runtime cho yt-dlp khi tải YouTube. Trên macOS có thể cài bằng `brew install python@3.11 ffmpeg node gh`; trên Ubuntu dùng trình quản lý gói tương ứng. Windows có thể dùng Node.js từ nodejs.org và Python/ffmpeg.
+Cần Python 3.11 trở lên, ffmpeg và Node.js 22 trở lên để làm JS runtime cho yt-dlp khi tải YouTube. Trên macOS có thể cài bằng `brew install python@3.11 ffmpeg node gh`; trên Ubuntu dùng trình quản lý gói tương ứng. Windows có thể dùng Node.js từ nodejs.org và Python/ffmpeg.
+
+Docker đã cài Node 22, bật runtime qua `js_runtimes` và cài `yt-dlp[default]` để có gói EJS tương thích. Xem [hướng dẫn EJS chính thức](https://github.com/yt-dlp/yt-dlp/wiki/EJS). Các thành phần này xử lý JavaScript challenge; YouTube vẫn có thể từ chối truy cập từ IP hosting. API trả lỗi thay vì báo thành công với danh sách định dạng rỗng.
 
 Tại thư mục dự án:
 

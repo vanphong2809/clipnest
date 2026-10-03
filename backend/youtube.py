@@ -95,7 +95,12 @@ def canonical_youtube_video(value: str) -> str:
     return validate_youtube_url(value)
 
 def friendly_youtube_error(error):
+    if isinstance(error, main.UserError):
+        return str(error)
     msg = str(error).lower()
+    if 'failed to extract any player response' in msg:
+        main.log.warning('YouTube failure code=player_response exception=%s', type(error).__name__)
+        return 'YouTube không trả dữ liệu phát video cho máy chủ. Hãy thử lại sau; quản trị viên cần kiểm tra kết nối hoặc cookies của backend.'
     if 'sign in to confirm you\'re not a bot' in msg or 'bot' in msg:
         return 'YouTube đang chặn máy chủ do nghi ngờ là bot. Hãy thử lại sau, hoặc quản trị viên cần cấu hình cookies.'
     if 'private video' in msg or 'is private' in msg:
@@ -116,7 +121,16 @@ def friendly_youtube_error(error):
         return 'Lỗi ghép file bằng ffmpeg trên máy chủ.'
     if 'requested format is not available' in msg:
         return 'YouTube không cung cấp định dạng tải phù hợp cho video này.'
-    return main.friendly_error(error)
+    code = main.error_code(error)
+    # Log only a classification, never cookies, signed URLs or upstream HTML.
+    main.log.warning('YouTube failure code=%s exception=%s', code, type(error).__name__)
+    return {
+        'network': 'Kết nối YouTube bị gián đoạn hoặc quá thời gian. Vui lòng thử lại sau.',
+        'login_required': 'YouTube yêu cầu đăng nhập. Quản trị viên cần cấu hình cookies hợp lệ.',
+        'tiktok_rate_limit': 'YouTube đang giới hạn lượt truy cập (429). Hãy chờ vài phút rồi thử lại.',
+        'access_denied': 'YouTube đang từ chối truy cập từ máy chủ hoặc yêu cầu xác minh. Cookies hợp lệ có thể giúp nhưng không đảm bảo.',
+        'upstream_response': 'YouTube trả dữ liệu rỗng hoặc không đúng định dạng. Hãy thử lại sau; quản trị viên cần kiểm tra yt-dlp và kết nối của backend.',
+    }.get(code, 'Không tải được nội dung YouTube. Quản trị viên cần kiểm tra yt-dlp hoặc cookies.')
 
 def youtube_options(directory=None, format_str=None, deadline=None):
     def check_progress(data):

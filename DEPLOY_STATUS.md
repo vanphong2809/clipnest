@@ -1,5 +1,13 @@
 # Clipnest — đã triển khai
 
+## Cập nhật 04/10/2026
+
+- GitHub Pages đã build thành công frontend `c947661` (run `37142769535`), gồm giao diện Instagram và phiên bản cache mới cho JavaScript.
+- Render đã Live bản Docker `33f6eaf`: Node 22, Python 3.11, ffmpeg và `yt-dlp[default]` (kèm EJS). `.dockerignore` đã cho phép module Instagram mà ứng dụng import.
+- Kiểm tra Docker local: metadata, MP4 (533916 byte), MP3 (457389 byte) của video thử `jNQXAC9IVRw` đều thành công; không còn file tạm sau response. Bộ kiểm thử trước deploy: 90 passed.
+- Health production trả 200 và CORS cho `https://vanphong2809.github.io` đúng. YouTube trên Render vẫn trả 502 khi lấy metadata; chưa thể xác nhận tải YouTube production đã hoạt động. Cần kiểm tra phản hồi upstream/kết nối từ Render, không kết luận cookies chắc chắn giải quyết được.
+- Bản sửa tiếp theo phân loại lỗi YouTube riêng, tránh thông báo nhầm TikTok và ghi log mã lỗi thay vì cookies, URL ký số hoặc HTML.
+
 Cập nhật: 29/09/2026.
 
 - Source: `/Users/vanphong/Desktop/tiktok-downloader`

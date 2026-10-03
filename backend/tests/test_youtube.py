@@ -110,3 +110,16 @@ def test_youtube_video_info_private(monkeypatch):
     response = client.post('/api/youtube/video/info', json={'url': url})
     assert response.status_code == 502
     assert 'riêng tư' in response.json()['detail'].lower()
+
+
+@pytest.mark.parametrize('message', [
+    'Failed to extract any player response',
+    'Unable to extract initial data',
+    'Connection timed out',
+    'HTTP Error 429: Too Many Requests',
+    'HTTP Error 403: Forbidden',
+])
+def test_youtube_errors_do_not_mention_tiktok(message):
+    result = youtube.friendly_youtube_error(Exception(message))
+    assert 'YouTube' in result
+    assert 'TikTok' not in result
