@@ -172,17 +172,22 @@ document.querySelectorAll('input[name="platform"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
         const platform = e.target.value;
         const isYoutube = platform === 'youtube';
+        const isInstagram = platform === 'instagram';
         
-        const tdWorkspace = yt$('td-workspace');
-        const ytWorkspace = yt$('yt-workspace');
+        const tdWorkspace = document.getElementById('td-workspace');
+        const ytWorkspace = document.getElementById('yt-workspace');
+        const igWorkspace = document.getElementById('ig-workspace');
         
-        if (tdWorkspace) tdWorkspace.style.display = isYoutube ? 'none' : 'block';
+        if (tdWorkspace) tdWorkspace.style.display = (isYoutube || isInstagram) ? 'none' : 'block';
         if (ytWorkspace) ytWorkspace.style.display = isYoutube ? 'block' : 'none';
+        if (igWorkspace) igWorkspace.style.display = isInstagram ? 'block' : 'none';
         
-        const permText = yt$('permission-text');
+        const permText = document.getElementById('permission-text');
         if (permText) {
             if (isYoutube) {
                 permText.innerHTML = 'Chỉ tải nội dung của chính bạn hoặc nội dung được phép tải; việc tải video có thể vi phạm Điều khoản dịch vụ của YouTube và bản quyền.';
+            } else if (isInstagram) {
+                permText.innerHTML = 'Chỉ tải nội dung của chính bạn. Instagram cực kỳ nghiêm ngặt về truy cập, vui lòng không lạm dụng.';
             } else {
                 permText.innerHTML = 'Chỉ tải nội dung của chính bạn hoặc nội dung được phép tải. Hãy tôn trọng bản quyền và <a href="https://www.tiktok.com/legal/page/row/terms-of-service/vi" target="_blank" rel="noopener noreferrer">Điều khoản sử dụng của TikTok</a>.';
             }
